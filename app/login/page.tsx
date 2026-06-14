@@ -12,31 +12,49 @@ export default function LoginPage() {
   const [error, setError] = useState('')
 
   async function handleLogin() {
+    // 1. Aggiungi questo controllo
+    if (!email || !password) {
+      setError('Per favore, inserisci email e password.')
+      return
+    }
+
     setLoading(true)
     setError('')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) { setError(error.message); setLoading(false) }
-    else router.push('/dashboard')
+    if (error) { 
+      setError(error.message)
+      setLoading(false) 
+    }
+    else {
+      router.push('/dashboard')
+    }
   }
 
   async function handleSignup() {
-  setLoading(true)
-  setError('')
-  const { error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo: `${window.location.origin}/auth/callback`,
-    },
-  })
-  if (error) {
-    setError(error.message)
-    setLoading(false)
-  } else {
-    setError('Controlla la tua email e clicca sul link di conferma.')
-    setLoading(false)
+    // 2. Aggiungi questo controllo
+    if (!email || !password) {
+      setError('Per favore, inserisci email e password.')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+    
+    if (error) {
+      setError(error.message)
+      setLoading(false)
+    } else {
+      setError('Controlla la tua email e clicca sul link di conferma.')
+      setLoading(false)
+    }
   }
-}
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950">
