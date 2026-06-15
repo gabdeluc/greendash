@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🌱 GreenDash
 
-## Getting Started
+Dashboard per il monitoraggio dei consumi energetici domestici.
+Inserisci le tue bollette, analizza i trend e ricevi suggerimenti personalizzati.
 
-First, run the development server:
+**Live demo →** [greendash.vercel.app](https://greendash.vercel.app)
 
-```bash
+## Stack
+
+- **Next.js 14** App Router + TypeScript
+- **Supabase** — database PostgreSQL, autenticazione, RLS
+- **Recharts** — grafici interattivi
+- **Tailwind CSS** — styling
+- **Vercel** — deploy
+
+## Features
+
+- 📊 Grafici consumi nel tempo (luce, gas, acqua)
+- 📈 Proiezioni automatiche sui prossimi 3 mesi
+- 🇮🇹 Confronto con la media nazionale ARERA
+- 💡 Suggerimenti personalizzati sui consumi
+- 🔐 Autenticazione sicura con sessioni per utente
+- 📱 Responsive mobile-first
+
+## Setup locale
+
+\`\`\`bash
+git clone https://github.com/tuousername/greendash
+cd greendash
+npm install
+\`\`\`
+
+Crea `.env.local`:
+
+\`\`\`
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+\`\`\`
+
+\`\`\`bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+\`\`\`
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Apri [localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Database
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Esegui questo SQL su Supabase per creare le tabelle:
 
-## Learn More
+\`\`\`sql
+create table bills (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  type text not null check (type in ('luce', 'gas', 'acqua')),
+  month int not null check (month between 1 and 12),
+  year int not null,
+  amount_eur numeric(8,2) not null,
+  kwh numeric(8,2),
+  created_at timestamptz default now()
+);
 
-To learn more about Next.js, take a look at the following resources:
+alter table bills enable row level security;
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+create policy "user_sees_own_bills"
+  on bills for all
+  using (auth.uid() = user_id);
+\`\`\`

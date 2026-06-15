@@ -53,8 +53,9 @@ export default function InserisciPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 p-8">
-      <div className="max-w-md mx-auto">
+    // Sostituisci il div esterno con:
+<div className="min-h-screen bg-gray-950 px-4 py-8 md:p-8">
+  <div className="max-w-md mx-auto">
         <div className="flex items-center gap-3 mb-8">
           <a href="/dashboard" className="text-gray-500 hover:text-gray-300 text-sm">← Dashboard</a>
         </div>
