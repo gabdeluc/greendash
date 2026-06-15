@@ -1,26 +1,104 @@
 @import "tailwindcss";
 
+/* GreenDash — refined dark design system */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Neutrals */
+  --background: #08090b;
+  --foreground: #f4f4f5;
+  --card: #101114;
+  --card-foreground: #f4f4f5;
+  --elevated: #16181c;
+  --muted: #1c1f24;
+  --muted-foreground: #8b8f98;
+  --subtle-foreground: #5c606b;
+  --border: #21242b;
+  --border-strong: #2c3038;
+  --input: #16181c;
+  --ring: #34d399;
+
+  /* Brand accent */
+  --primary: #34d399;
+  --primary-hover: #4ade80;
+  --primary-foreground: #052e1b;
+  --primary-soft: rgba(52, 211, 153, 0.12);
+
+  /* Utility types */
+  --electricity: #f5c44c;
+  --electricity-soft: rgba(245, 196, 76, 0.1);
+  --gas: #fb923c;
+  --gas-soft: rgba(251, 146, 60, 0.1);
+  --water: #60a5fa;
+  --water-soft: rgba(96, 165, 250, 0.1);
+
+  /* Feedback */
+  --positive: #34d399;
+  --negative: #f87171;
+
+  --radius: 0.75rem;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-elevated: var(--elevated);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+
+  --color-electricity: var(--electricity);
+  --color-electricity-soft: var(--electricity-soft);
+  --color-gas: var(--gas);
+  --color-gas-soft: var(--gas-soft);
+  --color-water: var(--water);
+  --color-water-soft: var(--water-soft);
+
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 0.25rem);
+  --radius-sm: calc(var(--radius) - 0.4rem);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--border);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Subtle scrollbar to match the refined aesthetic */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 9999px;
+  border: 3px solid var(--background);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
 }

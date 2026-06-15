@@ -1,38 +1,46 @@
+import { Lightbulb, Sparkles, TrendingUp } from "lucide-react";
+
 type Props = {
-  type: 'warning' | 'success' | 'info'
-  title: string
-  body: string
-}
+  type: "warning" | "success" | "info";
+  title: string;
+  body: string;
+};
 
 const styles = {
   warning: {
-    border: 'border-yellow-500/30',
-    bg: 'bg-yellow-500/5',
-    icon: '⚠️',
-    title: 'text-yellow-400',
+    icon: TrendingUp,
+    iconColor: "text-gas",
+    iconBg: "bg-gas-soft",
   },
   success: {
-    border: 'border-green-500/30',
-    bg: 'bg-green-500/5',
-    icon: '✅',
-    title: 'text-green-400',
+    icon: Sparkles,
+    iconColor: "text-primary",
+    iconBg: "bg-primary-soft",
   },
   info: {
-    border: 'border-blue-500/30',
-    bg: 'bg-blue-500/5',
-    icon: '💡',
-    title: 'text-blue-400',
+    icon: Lightbulb,
+    iconColor: "text-water",
+    iconBg: "bg-water-soft",
   },
-}
+};
 
 export default function SuggestionCard({ type, title, body }: Props) {
-  const s = styles[type]
+  const s = styles[type];
+  const Icon = s.icon;
+
   return (
-    <div className={`border ${s.border} ${s.bg} rounded-xl p-4`}>
-      <p className={`text-sm font-medium ${s.title} mb-1`}>
-        {s.icon} {title}
-      </p>
-      <p className="text-gray-400 text-sm leading-relaxed">{body}</p>
+    <div className="flex gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-strong">
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${s.iconBg}`}
+      >
+        <Icon className={`h-[18px] w-[18px] ${s.iconColor}`} strokeWidth={2} />
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-foreground">{title}</p>
+        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+          {body}
+        </p>
+      </div>
     </div>
-  )
+  );
 }
