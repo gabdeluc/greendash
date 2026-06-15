@@ -2,21 +2,33 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import Sidebar from '@/components/ui/Sidebar'
 
 const MONTHS = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
   'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre']
 
+const UTILITY = [
+  { type: 'luce',  label: 'Luce',  icon: 'bolt',                  color: '#f59e0b' },
+  { type: 'gas',   label: 'Gas',   icon: 'local_fire_department',  color: '#f97316' },
+  { type: 'acqua', label: 'Acqua', icon: 'water_drop',             color: '#3b82f6' },
+]
+
 export default function InserisciPage() {
   const supabase = createClient()
-  const router = useRouter()
+  const router   = useRouter()
+  const [email, setEmail]     = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [form, setForm] = useState({
-    type: 'luce',
-    month: new Date().getMonth() + 1,
-    year: new Date().getFullYear(),
-    amount_eur: '',
-    kwh: '',
+    type: 'luce', month: new Date().getMonth() + 1,
+    year: new Date().getFullYear(), amount_eur: '', kwh: '',
+  })
+
+  // Fetch email on mount
+  useState(() => {
+    createClient().auth.getUser().then(({ data }) => {
+      if (data.user?.email) setEmail(data.user.email)
+    })
   })
 
   function set(field: string, value: string | number) {
@@ -26,10 +38,8 @@ export default function InserisciPage() {
   async function handleSubmit() {
     if (!form.amount_eur) return
     setLoading(true)
-
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
-
     const { error } = await supabase.from('bills').insert({
       user_id: user.id,
       type: form.type,
@@ -38,7 +48,6 @@ export default function InserisciPage() {
       amount_eur: Number(form.amount_eur),
       kwh: form.kwh ? Number(form.kwh) : null,
     })
-
     setLoading(false)
     if (!error) {
       setSuccess(true)
@@ -46,104 +55,138 @@ export default function InserisciPage() {
     }
   }
 
-  const typeColors: Record<string, string> = {
-    luce:  'border-yellow-500 text-yellow-400',
-    gas:   'border-orange-500 text-orange-400',
-    acqua: 'border-blue-500 text-blue-400',
-  }
-
   return (
-    // Sostituisci il div esterno con:
-<div className="min-h-screen bg-gray-950 px-4 py-8 md:p-8">
-  <div className="max-w-md mx-auto">
-        <div className="flex items-center gap-3 mb-8">
-          <a href="/dashboard" className="text-gray-500 hover:text-gray-300 text-sm">← Dashboard</a>
-        </div>
+    <div className="min-h-screen bg-[#0e131f] text-[#dde2f3]">
+      <Sidebar email={email} />
 
-        <h1 className="text-white font-medium text-xl mb-6">Inserisci bolletta</h1>
+      <div className="ml-[240px] min-h-screen flex flex-col">
+        {/* Topbar */}
+        <header className="flex items-center justify-between px-8 py-4 border-b border-[#3c4a42] sticky top-0 bg-[#0e131f] z-10">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[#4edea3] text-2xl"
+              style={{ fontVariationSettings: "'FILL' 1" }}>
+              energy_savings_leaf
+            </span>
+            <span className="text-[#4edea3] font-semibold text-lg tracking-tight">GreenDash</span>
+          </div>
+        </header>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-5">
-          {/* Tipo */}
-          <div>
-            <label className="text-gray-400 text-xs uppercase tracking-wider block mb-2">Tipo</label>
-            <div className="flex gap-2">
-              {['luce','gas','acqua'].map(t => (
-                <button
-                  key={t}
-                  onClick={() => set('type', t)}
-                  className={`flex-1 py-2 rounded-lg border text-sm font-medium capitalize transition-all
-                    ${form.type === t
-                      ? typeColors[t] + ' bg-gray-800'
-                      : 'border-gray-700 text-gray-500 hover:border-gray-600'}`}
+        {/* Content */}
+        <main className="flex-1 p-8 max-w-[680px]">
+          <h1 className="text-2xl font-semibold tracking-tight mb-1">Inserisci Bolletta</h1>
+          <p className="text-[#bbcabf] text-sm mb-8">
+            Registra i dati dell&apos;ultima utenza per mantenere aggiornate le statistiche.
+          </p>
+
+          <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6 space-y-6">
+
+            {/* Tipo utenza */}
+            <div>
+              <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-3">
+                Tipo Utenza
+              </label>
+              <div className="grid grid-cols-3 gap-3">
+                {UTILITY.map(u => (
+                  <button
+                    key={u.type}
+                    onClick={() => set('type', u.type)}
+                    className={`flex flex-col items-center gap-2 py-4 rounded-xl border transition-all
+                      ${form.type === u.type
+                        ? 'border-current bg-[#242a36]'
+                        : 'border-[#3c4a42] hover:border-[#86948a] hover:bg-[#242a36]'}`}
+                    style={{ color: form.type === u.type ? u.color : '#bbcabf' }}
+                  >
+                    <span className="material-symbols-outlined text-2xl"
+                      style={{ fontVariationSettings: "'FILL' 1" }}>
+                      {u.icon}
+                    </span>
+                    <span className="text-sm font-medium">{u.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Mese + Anno */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-2">
+                  Mese
+                </label>
+                <select
+                  value={form.month}
+                  onChange={e => set('month', e.target.value)}
+                  className="w-full bg-[#0e131f] border border-[#3c4a42] rounded-lg px-3 py-2.5 text-[#dde2f3] text-sm focus:outline-none focus:border-[#4edea3] transition-colors appearance-none"
                 >
-                  {t === 'luce' ? '⚡' : t === 'gas' ? '🔥' : '💧'} {t}
-                </button>
-              ))}
+                  {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-2">
+                  Anno
+                </label>
+                <select
+                  value={form.year}
+                  onChange={e => set('year', e.target.value)}
+                  className="w-full bg-[#0e131f] border border-[#3c4a42] rounded-lg px-3 py-2.5 text-[#dde2f3] text-sm focus:outline-none focus:border-[#4edea3] transition-colors appearance-none"
+                >
+                  {[2023,2024,2025,2026].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
             </div>
-          </div>
 
-          {/* Mese e Anno */}
-          <div className="grid grid-cols-2 gap-3">
+            {/* Importo */}
             <div>
-              <label className="text-gray-400 text-xs uppercase tracking-wider block mb-2">Mese</label>
-              <select
-                value={form.month}
-                onChange={e => set('month', e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-green-500"
-              >
-                {MONTHS.map((m, i) => (
-                  <option key={i} value={i + 1}>{m}</option>
-                ))}
-              </select>
+              <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-2">
+                Importo
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#bbcabf] text-sm">€</span>
+                <input
+                  type="number"
+                  value={form.amount_eur}
+                  onChange={e => set('amount_eur', e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-[#0e131f] border border-[#3c4a42] rounded-lg pl-8 pr-4 py-2.5 text-[#dde2f3] text-sm focus:outline-none focus:border-[#4edea3] transition-colors"
+                />
+              </div>
             </div>
+
+            {/* kWh */}
             <div>
-              <label className="text-gray-400 text-xs uppercase tracking-wider block mb-2">Anno</label>
-              <select
-                value={form.year}
-                onChange={e => set('year', e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-green-500"
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider">
+                  Consumo (Opzionale)
+                </label>
+                <span className="text-[#bbcabf] text-[11px]">kWh</span>
+              </div>
+              <input
+                type="number"
+                value={form.kwh}
+                onChange={e => set('kwh', e.target.value)}
+                placeholder="0.0"
+                className="w-full bg-[#0e131f] border border-[#3c4a42] rounded-lg px-4 py-2.5 text-[#dde2f3] text-sm focus:outline-none focus:border-[#4edea3] transition-colors"
+              />
+            </div>
+
+            <div className="border-t border-[#3c4a42] pt-6 flex items-center gap-3 justify-end">
+              
+              <a
+                href="/dashboard"
+                className="px-5 py-2.5 rounded-lg border border-[#3c4a42] text-[#bbcabf] hover:text-[#dde2f3] hover:border-[#86948a] text-sm font-medium transition-all"
               >
-                {[2023,2024,2025,2026].map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
+                Annulla
+              </a>
+              <button
+                onClick={handleSubmit}
+                disabled={loading || success}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#10b981] hover:bg-[#4edea3] text-[#003824] font-semibold text-sm transition-colors disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[18px]">save</span>
+                {success ? 'Salvata!' : loading ? 'Salvataggio...' : 'Salva Bolletta'}
+              </button>
             </div>
           </div>
-
-          {/* Importo */}
-          <div>
-            <label className="text-gray-400 text-xs uppercase tracking-wider block mb-2">Importo (€)</label>
-            <input
-              type="number"
-              value={form.amount_eur}
-              onChange={e => set('amount_eur', e.target.value)}
-              placeholder="es. 87.50"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-green-500"
-            />
-          </div>
-
-          {/* kWh (opzionale) */}
-          <div>
-            <label className="text-gray-400 text-xs uppercase tracking-wider block mb-2">
-              kWh consumati <span className="text-gray-600">(opzionale)</span>
-            </label>
-            <input
-              type="number"
-              value={form.kwh}
-              onChange={e => set('kwh', e.target.value)}
-              placeholder="es. 210"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-green-500"
-            />
-          </div>
-
-          <button
-            onClick={handleSubmit}
-            disabled={loading || success}
-            className="w-full bg-green-500 hover:bg-green-400 text-gray-950 font-medium rounded-lg py-2.5 text-sm transition-colors disabled:opacity-50"
-          >
-            {success ? '✓ Salvata!' : loading ? 'Salvataggio...' : 'Salva bolletta'}
-          </button>
-        </div>
+        </main>
       </div>
     </div>
   )

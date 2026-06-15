@@ -1,21 +1,21 @@
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-servers'
-import KpiCard from '@/components/ui/KpiCard'
-import ConsumptionChart from '@/components/charts/ConsumptionChart'
-import ProjectionChart from '@/components/charts/ProjectionsChart'
+import Sidebar from '@/components/ui/Sidebar'
+import SparklineChart from '@/components/charts/SparklineChart'
 import SuggestionCard from '@/components/ui/SuggestionCard'
 import { getProjections } from '@/lib/projections'
 import { getSuggestions } from '@/lib/suggestion'
-import LogoutButton from '@/components/ui/LogoutButton'
 
 type Bill = {
-  id: string
-  type: string
-  month: number
-  year: number
-  amount_eur: number
-  kwh: number | null
+  id: string; type: string; month: number
+  year: number; amount_eur: number; kwh: number | null
 }
+
+const UTILITY = {
+  luce:  { label: 'Electricity', icon: 'bolt',      color: '#f59e0b', unit: 'kWh' },
+  gas:   { label: 'Gas',         icon: 'local_fire_department', color: '#f97316', unit: 'Sm³' },
+  acqua: { label: 'Water',       icon: 'water_drop', color: '#3b82f6', unit: 'm³'  },
+} as const
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient()
@@ -23,148 +23,200 @@ export default async function DashboardPage() {
   if (!session) redirect('/login')
 
   const { data } = await supabase
-    .from('bills')
-    .select('*')
+    .from('bills').select('*')
     .order('year', { ascending: true })
     .order('month', { ascending: true })
 
-  const bills: Bill[] = (data ?? []).map((b) => ({
-    id: b.id,
-    type: b.type,
-    month: Number(b.month),
-    year: Number(b.year),
+  // FIX: Aggiunto tipo esplicito (b: any)
+  const bills: Bill[] = (data ?? []).map((b: any) => ({
+    id: b.id, type: b.type,
+    month: Number(b.month), year: Number(b.year),
     amount_eur: Number(b.amount_eur),
     kwh: b.kwh ? Number(b.kwh) : null,
   }))
 
-  const now = new Date()
-  const currentMonth = now.getMonth() + 1
-  const currentYear = now.getFullYear()
-  const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1
-  const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear
-
-  const thisMonthBills = bills.filter(
-    (b) => b.month === currentMonth && b.year === currentYear
-  )
-  const lastMonthBills = bills.filter(
-    (b) => b.month === prevMonth && b.year === prevYear
-  )
-
-  const totalThisMonth = thisMonthBills.reduce((s, b) => s + b.amount_eur, 0)
-  const totalLastMonth = lastMonthBills.reduce((s, b) => s + b.amount_eur, 0)
-  const totalKwh = bills.filter((b) => b.kwh !== null).reduce((s, b) => s + (b.kwh ?? 0), 0)
-  const totalAll = bills.reduce((s, b) => s + b.amount_eur, 0)
-  const avgMonthly = bills.length > 0 ? (totalAll / 12).toFixed(2) : '0.00'
-
-  let trendLabel = 'Nessun dato precedente'
-  let trendDir: 'up' | 'down' | 'neutral' = 'neutral'
-  if (totalLastMonth > 0) {
-    const diff = ((totalThisMonth - totalLastMonth) / totalLastMonth) * 100
-    const sign = diff > 0 ? '+' : ''
-    trendLabel = `${sign}${diff.toFixed(1)}% vs mese scorso`
-    trendDir = diff > 0 ? 'up' : 'down'
+  // KPI per utility
+  function getKpi(type: string) {
+    const typeBills = bills.filter(b => b.type === type).slice(-6)
+    const last = typeBills[typeBills.length - 1]
+    const prev = typeBills[typeBills.length - 2]
+    const value = last ? (type === 'luce' && last.kwh ? last.kwh : last.amount_eur) : 0
+    const prevValue = prev ? (type === 'luce' && prev.kwh ? prev.kwh : prev.amount_eur) : 0
+    const trend = prevValue > 0 ? ((value - prevValue) / prevValue) * 100 : 0
+    const spark = typeBills.map(b => ({
+      value: type === 'luce' && b.kwh ? b.kwh : b.amount_eur,
+    }))
+    return { value, trend, spark }
   }
 
-  const projLuce  = getProjections(bills, 'luce')
-  const projGas   = getProjections(bills, 'gas')
-  const projAcqua = getProjections(bills, 'acqua')
+  // Projections totals (sum of next 3 months)
+  function getProjectionTotal(type: string) {
+    const proj = getProjections(bills, type)
+    return proj.filter((p: any) => p.isProjection).reduce((s: number, p: any) => s + p.value, 0)
+  }
+
+  const projTotals = {
+    luce:  getProjectionTotal('luce'),
+    gas:   getProjectionTotal('gas'),
+    acqua: getProjectionTotal('acqua'),
+  }
+  const maxProj = Math.max(...Object.values(projTotals), 1)
   const suggestions = getSuggestions(bills)
 
   return (
-    <div className="min-h-screen bg-gray-950 p-8">
-      <div className="max-w-5xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#0e131f] text-[#dde2f3]">
+      <Sidebar email={session.user.email ?? ''} />
 
-        {/* Header */}
-<div className="flex items-center justify-between">
-  <div className="flex items-center gap-2">
-    <span className="text-green-400 text-xl">🌱</span>
-    <h1 className="text-white font-medium text-lg">GreenDash</h1>
-  </div>
-  <div className="flex items-center gap-3">
-    <p className="text-gray-600 text-sm">{session.user.email}</p>
-    
-    <a
-      href="/inserisci"
-      className="bg-green-500 hover:bg-green-400 text-gray-950 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-    >
-      + Bolletta
-    </a>
-    <LogoutButton />
-  </div>
-</div>
+      <div className="ml-[240px] min-h-screen flex flex-col">
+        {/* Topbar */}
+        <header className="flex items-center justify-between px-8 py-4 border-b border-[#3c4a42] bg-[#0e131f] sticky top-0 z-10">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[#4edea3] text-2xl"
+              style={{ fontVariationSettings: "'FILL' 1" }}>
+              energy_savings_leaf
+            </span>
+            <span className="text-[#4edea3] font-semibold text-lg tracking-tight">GreenDash</span>
+          </div>
+          
+          {/* FIX: Aggiunta apertura tag <a */}
+          <a
+            href="/inserisci"
+            className="flex items-center gap-2 bg-[#10b981] hover:bg-[#4edea3] text-[#003824] font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+          >
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            Add Bill
+          </a>
+        </header>
 
-        {/* KPI */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KpiCard
-            label="Questo mese"
-            value={`€${totalThisMonth.toFixed(2)}`}
-            sub={trendLabel}
-            trend={trendDir}
-          />
-          <KpiCard
-            label="kWh totali"
-            value={totalKwh > 0 ? `${totalKwh}` : '—'}
-            sub="Tutti i periodi"
-          />
-          <KpiCard
-            label="Media mensile"
-            value={`€${avgMonthly}`}
-            sub="Stima annuale"
-          />
-          <KpiCard
-            label="Bollette inserite"
-            value={`${bills.length}`}
-            sub="Nel database"
-          />
-        </div>
+        {/* Content */}
+        <main className="flex-1 p-8 max-w-[1280px] w-full">
+          <h1 className="text-2xl font-semibold tracking-tight mb-1">Overview</h1>
+          <p className="text-[#bbcabf] text-sm mb-8">Current utility consumption and projections.</p>
 
-        {/* Grafico consumi */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h2 className="text-white font-medium mb-6">Consumi nel tempo</h2>
-          <ConsumptionChart bills={bills} />
-        </div>
+          {/* KPI Cards */}
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            {(['luce', 'gas', 'acqua'] as const).map(type => {
+              const u = UTILITY[type]
+              const { value, trend, spark } = getKpi(type)
+              const trendUp = trend > 0
+              return (
+                <div key={type} className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                        style={{ background: `${u.color}20` }}>
+                        <span className="material-symbols-outlined text-[16px]"
+                          style={{ color: u.color, fontVariationSettings: "'FILL' 1" }}>
+                          {u.icon}
+                        </span>
+                      </div>
+                      <span className="text-[#bbcabf] text-xs font-semibold uppercase tracking-wider">
+                        {u.label}
+                      </span>
+                    </div>
+                    {bills.length > 0 && (
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full
+                        ${trendUp
+                          ? 'text-red-400 bg-red-400/10'
+                          : 'text-[#4edea3] bg-[#4edea3]/10'}`}>
+                        {trendUp ? '+' : ''}{trend.toFixed(1)}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-baseline gap-1.5 mb-3">
+                    <span className="text-3xl font-bold tracking-tight">
+                      {value > 0 ? value.toFixed(0) : '—'}
+                    </span>
+                    {value > 0 && (
+                      <span className="text-[#bbcabf] text-sm">{u.unit}</span>
+                    )}
+                  </div>
+                  {spark.length > 1 && (
+                    <SparklineChart data={spark} color={u.color} />
+                  )}
+                </div>
+              )
+            })}
+          </div>
 
-        {/* Proiezioni */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h2 className="text-white font-medium mb-2">Proiezioni prossimi 3 mesi</h2>
-          <p className="text-gray-500 text-sm mb-6">
-            Basate sulla tendenza degli ultimi mesi — la linea tratteggiata è la stima.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <p className="text-yellow-400 text-sm font-medium mb-3">⚡ Luce</p>
-              <ProjectionChart data={projLuce} color="#facc15" label="Luce" />
+          {/* Charts + Projections */}
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            {/* Consumption chart */}
+            <div className="col-span-2 bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="font-semibold text-[#dde2f3]">Consumption Trends</h2>
+                <div className="flex items-center gap-4 text-xs text-[#bbcabf]">
+                  {(['luce', 'gas', 'acqua'] as const).map(t => (
+                    <span key={t} className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full inline-block"
+                        style={{ background: UTILITY[t].color }} />
+                      {UTILITY[t].label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              {/* Import ConsumptionChart */}
+              <ConsumptionChartWrapper bills={bills} />
             </div>
-            <div>
-              <p className="text-orange-400 text-sm font-medium mb-3">🔥 Gas</p>
-              <ProjectionChart data={projGas} color="#fb923c" label="Gas" />
-            </div>
-            <div>
-              <p className="text-blue-400 text-sm font-medium mb-3">💧 Acqua</p>
-              <ProjectionChart data={projAcqua} color="#60a5fa" label="Acqua" />
+
+            {/* Projections */}
+            <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6">
+              <h2 className="font-semibold text-[#dde2f3] mb-1">3-Month Projections</h2>
+              <p className="text-[#bbcabf] text-xs mb-6">Estimated Q3 totals</p>
+              <div className="space-y-6">
+                {(['luce', 'gas', 'acqua'] as const).map(type => {
+                  const u = UTILITY[type]
+                  const total = projTotals[type]
+                  const pct = maxProj > 0 ? (total / maxProj) * 100 : 0
+                  return (
+                    <div key={type}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="material-symbols-outlined text-[16px]"
+                            style={{ color: u.color, fontVariationSettings: "'FILL' 1" }}>
+                            {u.icon}
+                          </span>
+                          <span className="text-sm text-[#dde2f3]">{u.label}</span>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-[#dde2f3]">
+                            € {total > 0 ? total.toFixed(2) : '—'}
+                          </p>
+                          <p className="text-[10px] text-[#bbcabf]">Est. Q3 Total</p>
+                        </div>
+                      </div>
+                      <div className="h-1 bg-[#242a36] rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${pct}%`, background: u.color }}
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* AI Insights */}
+              <div className="mt-8">
+                <h2 className="font-semibold text-[#dde2f3] mb-4">AI Insights vs National Avg</h2>
+                <div className="space-y-3">
+                  {/* FIX: Aggiunti i tipi espliciti s: any e i: number */}
+                  {suggestions.map((s: any, i: number) => (
+                    <SuggestionCard key={i} type={s.type} title={s.title} body={s.body} />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Suggerimenti */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h2 className="text-white font-medium mb-2">Suggerimenti</h2>
-          <p className="text-gray-500 text-sm mb-6">
-            Analisi basata sui tuoi consumi vs media nazionale ARERA.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {suggestions.map((s, i) => (
-              <SuggestionCard
-                key={i}
-                type={s.type}
-                title={s.title}
-                body={s.body}
-              />
-            ))}
-          </div>
-        </div>
-
+        </main>
       </div>
     </div>
   )
+}
+
+// Wrapper per ConsumptionChart (client component)
+import ConsumptionChartInner from '@/components/charts/ConsumptionChart'
+
+function ConsumptionChartWrapper({ bills }: { bills: Bill[] }) {
+  return <ConsumptionChartInner bills={bills} />
 }

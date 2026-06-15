@@ -5,34 +5,30 @@ type Props = {
 }
 
 const styles = {
-  warning: {
-    border: 'border-yellow-500/30',
-    bg: 'bg-yellow-500/5',
-    icon: '⚠️',
-    title: 'text-yellow-400',
-  },
-  success: {
-    border: 'border-green-500/30',
-    bg: 'bg-green-500/5',
-    icon: '✅',
-    title: 'text-green-400',
-  },
-  info: {
-    border: 'border-blue-500/30',
-    bg: 'bg-blue-500/5',
-    icon: '💡',
-    title: 'text-blue-400',
-  },
+  warning: { border: '#f59e0b', bg: '#f59e0b0d', icon: 'warning',      text: '#f59e0b' },
+  success: { border: '#4edea3', bg: '#4edea30d', icon: 'check_circle',  text: '#4edea3' },
+  info:    { border: '#3b82f6', bg: '#3b82f60d', icon: 'info',          text: '#3b82f6' },
 }
 
 export default function SuggestionCard({ type, title, body }: Props) {
   const s = styles[type]
   return (
-    <div className={`border ${s.border} ${s.bg} rounded-xl p-4`}>
-      <p className={`text-sm font-medium ${s.title} mb-1`}>
-        {s.icon} {title}
-      </p>
-      <p className="text-gray-400 text-sm leading-relaxed">{body}</p>
+    <div
+      className="rounded-xl p-4 border"
+      style={{ borderColor: `${s.border}4d`, background: s.bg }}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className="material-symbols-outlined text-[18px] mt-0.5 flex-shrink-0"
+          style={{ color: s.text, fontVariationSettings: "'FILL' 1" }}
+        >
+          {s.icon}
+        </span>
+        <div>
+          <p className="text-sm font-semibold mb-1" style={{ color: s.text }}>{title}</p>
+          <p className="text-[#bbcabf] text-xs leading-relaxed">{body}</p>
+        </div>
+      </div>
     </div>
   )
 }
