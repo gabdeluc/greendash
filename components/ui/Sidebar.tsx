@@ -6,6 +6,7 @@ type Props = { email: string }
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard',   icon: 'grid_view'    },
+  { href: '/bollette',  label: 'Bollette',    icon: 'list_alt'     },
   { href: '/inserisci', label: 'Insert Bill', icon: 'receipt_long' },
 ]
 

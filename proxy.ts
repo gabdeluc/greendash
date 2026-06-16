@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -23,16 +23,18 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
+  // getUser() verifica il token col server Supabase, a differenza di
+  // getSession() che si fida solo del cookie. Più sicuro per le route protette.
+  const { data: { user } } = await supabase.auth.getUser()
 
   const isProtected = request.nextUrl.pathname.startsWith('/dashboard') ||
                       request.nextUrl.pathname.startsWith('/inserisci')
 
-  if (!session && isProtected) {
+  if (!user && isProtected) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (session && request.nextUrl.pathname === '/login') {
+  if (user && request.nextUrl.pathname === '/login') {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
