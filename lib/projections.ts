@@ -20,6 +20,7 @@ export type Bill = {
   year: number
   type: string
   amount_eur: number
+  months_covered?: number
 }
 
 export type ProjectionPoint = {
@@ -42,20 +43,22 @@ export function getProjections(bills: Bill[], type: string): ProjectionPoint[] {
   const reg = linearRegression(points)
   if (!reg) return []
 
-  const history: ProjectionPoint[] = filtered.map((b, i) => ({
+  const history: ProjectionPoint[] = filtered.map((b) => ({
     label: `${MONTHS[b.month - 1]} ${b.year}`,
     value: Math.round(b.amount_eur * 100) / 100,
     isProjection: false,
   }))
 
   const last = filtered[filtered.length - 1]
+  const cadence = last.months_covered ?? 1
   const projections: ProjectionPoint[] = []
 
   for (let i = 1; i <= 3; i++) {
     const futureX = points.length - 1 + i
     const projected = reg.slope * futureX + reg.intercept
-    const futureMonth = ((last.month - 1 + i) % 12) + 1
-    const futureYear = last.year + Math.floor((last.month - 1 + i) / 12)
+    const monthsAhead = cadence * i
+    const futureMonth = ((last.month - 1 + monthsAhead) % 12) + 1
+    const futureYear = last.year + Math.floor((last.month - 1 + monthsAhead) / 12)
 
     projections.push({
       label: `${MONTHS[futureMonth - 1]} ${futureYear}`,

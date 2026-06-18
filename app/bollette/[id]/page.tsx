@@ -47,6 +47,7 @@ export default async function EditBollettaPage({ params }: Props) {
             year: Number(bill.year),
             amount_eur: Number(bill.amount_eur),
             kwh: bill.kwh ? Number(bill.kwh) : null,
+            months_covered: Number(bill.months_covered ?? 1),
           }} />
         </main>
       </div>

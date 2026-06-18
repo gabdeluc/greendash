@@ -1,31 +1,43 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
 type Bill = {
   id: string
-  type: 'luce' | 'gas' | 'acqua'
+  type: 'luce' | 'gas' | 'acqua' | 'telefono'
   month: number
   year: number
   amount_eur: number
   kwh: number | null
+  months_covered: number
 }
 
 type Props = { bills: Bill[] }
 
-const MONTHS = ['Gen','Feb','Mar','Apr','Mag','Giu',
-                'Lug','Ago','Set','Ott','Nov','Dic']
+const MONTHS = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic']
 
 const UTILITY = {
-  luce:  { label: 'Luce',  icon: 'bolt',                  color: '#f59e0b' },
-  gas:   { label: 'Gas',   icon: 'local_fire_department',  color: '#f97316' },
-  acqua: { label: 'Acqua', icon: 'water_drop',             color: '#3b82f6' },
+  luce:     { label: 'Luce',     icon: 'bolt',                  color: '#f59e0b' },
+  gas:      { label: 'Gas',      icon: 'local_fire_department', color: '#f97316' },
+  acqua:    { label: 'Acqua',    icon: 'water_drop',            color: '#3b82f6' },
+  telefono: { label: 'Telefono', icon: 'call',                  color: '#a78bfa' },
 } as const
+
+const FREQUENCY_LABEL: Record<number, string> = {
+  1: 'Mensile', 2: 'Bimestrale', 3: 'Trimestrale', 4: 'Quadrimestrale',
+}
 
 export default function BollettaTable({ bills: initialBills }: Props) {
   const [bills, setBills] = useState(initialBills)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [seeding, setSeeding] = useState(false)
   const supabase = createClient()
+  const router = useRouter()
+
+  useEffect(() => {
+    setBills(initialBills)
+  }, [initialBills])
 
   async function handleDelete(id: string) {
     const ok = window.confirm("Vuoi davvero eliminare questa bolletta? L'azione non è reversibile.")
@@ -42,18 +54,36 @@ export default function BollettaTable({ bills: initialBills }: Props) {
     setBills((prev) => prev.filter((b) => b.id !== id))
   }
 
+  async function handleSeed() {
+    setSeeding(true)
+    const res = await fetch('/inserisci/seed', { method: 'POST' })
+    setSeeding(false)
+    if (res.ok) router.refresh()
+    else alert('Errore durante il caricamento dei dati demo.')
+  }
+
   if (bills.length === 0) {
     return (
       <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-10 text-center">
         <p className="text-[#bbcabf] text-sm mb-4">Nessuna bolletta trovata.</p>
-        
-        <a
-          href="/inserisci"
-          className="inline-flex items-center gap-2 bg-[#10b981] hover:bg-[#4edea3] text-[#003824] font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
-        >
-          <span className="material-symbols-outlined text-[18px]">add</span>
-          Inserisci la prima bolletta
-        </a>
+        <div className="flex items-center justify-center gap-3">
+          
+          <a
+            href="/inserisci"
+            className="inline-flex items-center gap-2 bg-[#10b981] hover:bg-[#4edea3] text-[#003824] font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+          >
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            Inserisci la prima bolletta
+          </a>
+          <button
+            onClick={handleSeed}
+            disabled={seeding}
+            className="inline-flex items-center gap-2 border border-[#3c4a42] text-[#bbcabf] hover:text-[#dde2f3] hover:border-[#86948a] text-sm font-medium px-4 py-2 rounded-lg transition-all disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+            {seeding ? 'Caricamento...' : 'Carica dati demo'}
+          </button>
+        </div>
       </div>
     )
   }
@@ -87,6 +117,11 @@ export default function BollettaTable({ bills: initialBills }: Props) {
                   </td>
                   <td className="px-6 py-3.5 text-[#bbcabf]">
                     {MONTHS[b.month - 1]} {b.year}
+                    {b.months_covered > 1 && (
+                      <span className="block text-[10px] text-[#bbcabf]/70 mt-0.5">
+                        {FREQUENCY_LABEL[b.months_covered] ?? `${b.months_covered} mesi`}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-3.5 text-[#dde2f3] font-medium">
                     € {b.amount_eur.toFixed(2)}

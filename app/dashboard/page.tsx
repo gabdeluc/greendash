@@ -9,18 +9,20 @@ import { getSuggestions } from '@/lib/suggestion'
 type Bill = {
   id: string; type: string; month: number
   year: number; amount_eur: number; kwh: number | null
+  months_covered: number
 }
 
 const UTILITY = {
-  luce:  { label: 'Electricity', icon: 'bolt',      color: '#f59e0b', unit: 'kWh' },
-  gas:   { label: 'Gas',         icon: 'local_fire_department', color: '#f97316', unit: 'Sm³' },
-  acqua: { label: 'Water',       icon: 'water_drop', color: '#3b82f6', unit: 'm³'  },
+  luce:     { label: 'Electricity', icon: 'bolt',                  color: '#f59e0b', unit: 'kWh' },
+  gas:      { label: 'Gas',         icon: 'local_fire_department', color: '#f97316', unit: 'Sm³' },
+  acqua:    { label: 'Water',       icon: 'water_drop',            color: '#3b82f6', unit: 'm³'  },
+  telefono: { label: 'Telefono',    icon: 'call',                  color: '#a78bfa', unit: ''    },
 } as const
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
   const { data } = await supabase
     .from('bills').select('*')
@@ -33,6 +35,7 @@ export default async function DashboardPage() {
     month: Number(b.month), year: Number(b.year),
     amount_eur: Number(b.amount_eur),
     kwh: b.kwh ? Number(b.kwh) : null,
+    months_covered: Number(b.months_covered ?? 1),
   }))
 
   // KPI per utility
@@ -56,16 +59,17 @@ export default async function DashboardPage() {
   }
 
   const projTotals = {
-    luce:  getProjectionTotal('luce'),
-    gas:   getProjectionTotal('gas'),
-    acqua: getProjectionTotal('acqua'),
+    luce:     getProjectionTotal('luce'),
+    gas:      getProjectionTotal('gas'),
+    acqua:    getProjectionTotal('acqua'),
+    telefono: getProjectionTotal('telefono'),
   }
   const maxProj = Math.max(...Object.values(projTotals), 1)
   const suggestions = getSuggestions(bills)
 
   return (
     <div className="min-h-screen bg-[#0e131f] text-[#dde2f3]">
-      <Sidebar email={session.user.email ?? ''} />
+      <Sidebar email={user.email ?? ''} />
 
       <div className="ml-[240px] min-h-screen flex flex-col">
         {/* Topbar */}
@@ -77,8 +81,7 @@ export default async function DashboardPage() {
             </span>
             <span className="text-[#4edea3] font-semibold text-lg tracking-tight">GreenDash</span>
           </div>
-          
-          {/* FIX: Aggiunta apertura tag <a */}
+
           <a
             href="/inserisci"
             className="flex items-center gap-2 bg-[#10b981] hover:bg-[#4edea3] text-[#003824] font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
@@ -94,8 +97,8 @@ export default async function DashboardPage() {
           <p className="text-[#bbcabf] text-sm mb-8">Current utility consumption and projections.</p>
 
           {/* KPI Cards */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            {(['luce', 'gas', 'acqua'] as const).map(type => {
+          <div className="grid grid-cols-4 gap-4 mb-6">
+            {(['luce', 'gas', 'acqua', 'telefono'] as const).map(type => {
               const u = UTILITY[type]
               const { value, trend, spark } = getKpi(type)
               const trendUp = trend > 0
@@ -116,9 +119,7 @@ export default async function DashboardPage() {
                     </div>
                     {bills.length > 0 && (
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full
-                        ${trendUp
-                          ? 'text-red-400 bg-red-400/10'
-                          : 'text-[#4edea3] bg-[#4edea3]/10'}`}>
+                        ${trendUp ? 'text-red-400 bg-red-400/10' : 'text-[#4edea3] bg-[#4edea3]/10'}`}>
                         {trendUp ? '+' : ''}{trend.toFixed(1)}%
                       </span>
                     )}
@@ -127,7 +128,7 @@ export default async function DashboardPage() {
                     <span className="text-3xl font-bold tracking-tight">
                       {value > 0 ? value.toFixed(0) : '—'}
                     </span>
-                    {value > 0 && (
+                    {value > 0 && u.unit && (
                       <span className="text-[#bbcabf] text-sm">{u.unit}</span>
                     )}
                   </div>
@@ -146,7 +147,7 @@ export default async function DashboardPage() {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="font-semibold text-[#dde2f3]">Consumption Trends</h2>
                 <div className="flex items-center gap-4 text-xs text-[#bbcabf]">
-                  {(['luce', 'gas', 'acqua'] as const).map(t => (
+                  {(['luce', 'gas', 'acqua', 'telefono'] as const).map(t => (
                     <span key={t} className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full inline-block"
                         style={{ background: UTILITY[t].color }} />
@@ -155,7 +156,6 @@ export default async function DashboardPage() {
                   ))}
                 </div>
               </div>
-              {/* Import ConsumptionChart */}
               <ConsumptionChartWrapper bills={bills} />
             </div>
 
@@ -164,7 +164,7 @@ export default async function DashboardPage() {
               <h2 className="font-semibold text-[#dde2f3] mb-1">3-Month Projections</h2>
               <p className="text-[#bbcabf] text-xs mb-6">Estimated Q3 totals</p>
               <div className="space-y-6">
-                {(['luce', 'gas', 'acqua'] as const).map(type => {
+                {(['luce', 'gas', 'acqua', 'telefono'] as const).map(type => {
                   const u = UTILITY[type]
                   const total = projTotals[type]
                   const pct = maxProj > 0 ? (total / maxProj) * 100 : 0

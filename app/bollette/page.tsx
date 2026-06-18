@@ -21,6 +21,7 @@ export default async function BollettePage() {
     year: Number(b.year),
     amount_eur: Number(b.amount_eur),
     kwh: b.kwh ? Number(b.kwh) : null,
+    months_covered: Number(b.months_covered ?? 1),
   }))
 
   return (
@@ -37,7 +38,7 @@ export default async function BollettePage() {
             <span className="text-[#4edea3] font-semibold text-lg tracking-tight">GreenDash</span>
           </div>
           
-            <a
+          <a
             href="/inserisci"
             className="flex items-center gap-2 bg-[#10b981] hover:bg-[#4edea3] text-[#003824] font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
           >

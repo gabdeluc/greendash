@@ -14,6 +14,14 @@ export const NATIONAL_AVERAGES = {
     monthly_kwh: null,
     label: 'Media nazionale acqua',
   },
+  telefono: {
+    // Niente media ARERA: il telefono/internet non è un servizio regolamentato,
+    // quindi non lo confrontiamo con una media nazionale — resta comunque
+    // tracciato in KPI e grafici.
+    monthly_eur: null,
+    monthly_kwh: null,
+    label: 'Telefono / Internet',
+  },
 }
 
 export type UtilityType = keyof typeof NATIONAL_AVERAGES

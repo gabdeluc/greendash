@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Sidebar from '@/components/ui/Sidebar'
@@ -8,9 +8,22 @@ const MONTHS = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
   'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre']
 
 const UTILITY = [
-  { type: 'luce',  label: 'Luce',  icon: 'bolt',                  color: '#f59e0b' },
-  { type: 'gas',   label: 'Gas',   icon: 'local_fire_department',  color: '#f97316' },
-  { type: 'acqua', label: 'Acqua', icon: 'water_drop',             color: '#3b82f6' },
+  { type: 'luce',     label: 'Luce',     icon: 'bolt',                  color: '#f59e0b' },
+  { type: 'gas',      label: 'Gas',      icon: 'local_fire_department', color: '#f97316' },
+  { type: 'acqua',    label: 'Acqua',    icon: 'water_drop',            color: '#3b82f6' },
+  { type: 'telefono', label: 'Telefono', icon: 'call',                  color: '#a78bfa' },
+]
+
+// Solo un default suggerito quando cambi tipo utenza: sempre modificabile.
+const DEFAULT_MONTHS_COVERED: Record<string, number> = {
+  luce: 2, gas: 2, acqua: 3, telefono: 1,
+}
+
+const FREQUENCY_OPTIONS = [
+  { value: 1, label: 'Mensile' },
+  { value: 2, label: 'Bimestrale' },
+  { value: 3, label: 'Trimestrale' },
+  { value: 4, label: 'Quadrimestrale' },
 ]
 
 export default function InserisciPage() {
@@ -22,17 +35,21 @@ export default function InserisciPage() {
   const [form, setForm] = useState({
     type: 'luce', month: new Date().getMonth() + 1,
     year: new Date().getFullYear(), amount_eur: '', kwh: '',
+    months_covered: 2,
   })
 
-  // Fetch email on mount
-  useState(() => {
+  useEffect(() => {
     createClient().auth.getUser().then(({ data }) => {
       if (data.user?.email) setEmail(data.user.email)
     })
-  })
+  }, [])
 
   function set(field: string, value: string | number) {
     setForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  function selectType(type: string) {
+    setForm(prev => ({ ...prev, type, months_covered: DEFAULT_MONTHS_COVERED[type] ?? 1 }))
   }
 
   async function handleSubmit() {
@@ -47,6 +64,7 @@ export default function InserisciPage() {
       year: Number(form.year),
       amount_eur: Number(form.amount_eur),
       kwh: form.kwh ? Number(form.kwh) : null,
+      months_covered: Number(form.months_covered),
     })
     setLoading(false)
     if (!error) {
@@ -60,7 +78,6 @@ export default function InserisciPage() {
       <Sidebar email={email} />
 
       <div className="ml-[240px] min-h-screen flex flex-col">
-        {/* Topbar */}
         <header className="flex items-center justify-between px-8 py-4 border-b border-[#3c4a42] sticky top-0 bg-[#0e131f] z-10">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[#4edea3] text-2xl"
@@ -71,7 +88,6 @@ export default function InserisciPage() {
           </div>
         </header>
 
-        {/* Content */}
         <main className="flex-1 p-8 max-w-[680px]">
           <h1 className="text-2xl font-semibold tracking-tight mb-1">Inserisci Bolletta</h1>
           <p className="text-[#bbcabf] text-sm mb-8">
@@ -80,16 +96,15 @@ export default function InserisciPage() {
 
           <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6 space-y-6">
 
-            {/* Tipo utenza */}
             <div>
               <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-3">
                 Tipo Utenza
               </label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-4 gap-3">
                 {UTILITY.map(u => (
                   <button
                     key={u.type}
-                    onClick={() => set('type', u.type)}
+                    onClick={() => selectType(u.type)}
                     className={`flex flex-col items-center gap-2 py-4 rounded-xl border transition-all
                       ${form.type === u.type
                         ? 'border-current bg-[#242a36]'
@@ -106,35 +121,53 @@ export default function InserisciPage() {
               </div>
             </div>
 
-            {/* Mese + Anno */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-2">
-                  Mese
-                </label>
-                <select
-                  value={form.month}
-                  onChange={e => set('month', e.target.value)}
-                  className="w-full bg-[#0e131f] border border-[#3c4a42] rounded-lg px-3 py-2.5 text-[#dde2f3] text-sm focus:outline-none focus:border-[#4edea3] transition-colors appearance-none"
-                >
-                  {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-2">
-                  Anno
-                </label>
-                <select
-                  value={form.year}
-                  onChange={e => set('year', e.target.value)}
-                  className="w-full bg-[#0e131f] border border-[#3c4a42] rounded-lg px-3 py-2.5 text-[#dde2f3] text-sm focus:outline-none focus:border-[#4edea3] transition-colors appearance-none"
-                >
-                  {[2023,2024,2025,2026].map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
+            <div>
+              <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-2">
+                Periodo di Fatturazione
+              </label>
+              <select
+                value={form.months_covered}
+                onChange={e => set('months_covered', Number(e.target.value))}
+                className="w-full bg-[#0e131f] border border-[#3c4a42] rounded-lg px-3 py-2.5 text-[#dde2f3] text-sm focus:outline-none focus:border-[#4edea3] transition-colors appearance-none"
+              >
+                {FREQUENCY_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+              </select>
             </div>
 
-            {/* Importo */}
+            <div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-2">
+                    Mese
+                  </label>
+                  <select
+                    value={form.month}
+                    onChange={e => set('month', e.target.value)}
+                    className="w-full bg-[#0e131f] border border-[#3c4a42] rounded-lg px-3 py-2.5 text-[#dde2f3] text-sm focus:outline-none focus:border-[#4edea3] transition-colors appearance-none"
+                  >
+                    {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-2">
+                    Anno
+                  </label>
+                  <select
+                    value={form.year}
+                    onChange={e => set('year', e.target.value)}
+                    className="w-full bg-[#0e131f] border border-[#3c4a42] rounded-lg px-3 py-2.5 text-[#dde2f3] text-sm focus:outline-none focus:border-[#4edea3] transition-colors appearance-none"
+                  >
+                    {[2023,2024,2025,2026].map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
+              {form.months_covered > 1 && (
+                <p className="text-[#bbcabf] text-[11px] mt-2">
+                  Indica il mese di chiusura del periodo (es. bolletta Mag–Giu → seleziona Giugno).
+                </p>
+              )}
+            </div>
+
             <div>
               <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-2">
                 Importo
@@ -151,22 +184,23 @@ export default function InserisciPage() {
               </div>
             </div>
 
-            {/* kWh */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider">
-                  Consumo (Opzionale)
-                </label>
-                <span className="text-[#bbcabf] text-[11px]">kWh</span>
+            {form.type !== 'telefono' && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider">
+                    Consumo (Opzionale)
+                  </label>
+                  <span className="text-[#bbcabf] text-[11px]">kWh</span>
+                </div>
+                <input
+                  type="number"
+                  value={form.kwh}
+                  onChange={e => set('kwh', e.target.value)}
+                  placeholder="0.0"
+                  className="w-full bg-[#0e131f] border border-[#3c4a42] rounded-lg px-4 py-2.5 text-[#dde2f3] text-sm focus:outline-none focus:border-[#4edea3] transition-colors"
+                />
               </div>
-              <input
-                type="number"
-                value={form.kwh}
-                onChange={e => set('kwh', e.target.value)}
-                placeholder="0.0"
-                className="w-full bg-[#0e131f] border border-[#3c4a42] rounded-lg px-4 py-2.5 text-[#dde2f3] text-sm focus:outline-none focus:border-[#4edea3] transition-colors"
-              />
-            </div>
+            )}
 
             <div className="border-t border-[#3c4a42] pt-6 flex items-center gap-3 justify-end">
               
