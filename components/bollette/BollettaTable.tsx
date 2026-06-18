@@ -1,11 +1,13 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import type { UtilityType } from '@/lib/averages'
 
 type Bill = {
   id: string
-  type: 'luce' | 'gas' | 'acqua' | 'telefono'
+  type: UtilityType
   month: number
   year: number
   amount_eur: number
@@ -29,15 +31,16 @@ const FREQUENCY_LABEL: Record<number, string> = {
 }
 
 export default function BollettaTable({ bills: initialBills }: Props) {
-  const [bills, setBills] = useState(initialBills)
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [seeding, setSeeding] = useState(false)
   const supabase = createClient()
   const router = useRouter()
 
-  useEffect(() => {
-    setBills(initialBills)
-  }, [initialBills])
+  // Calcolato direttamente nel render, niente useEffect+setState: la fonte
+  // di verità resta la prop bills, qui togliamo solo le righe eliminate in
+  // questa sessione, per un feedback immediato senza aspettare il refresh.
+  const bills = initialBills.filter((b) => !deletedIds.has(b.id))
 
   async function handleDelete(id: string) {
     const ok = window.confirm("Vuoi davvero eliminare questa bolletta? L'azione non è reversibile.")
@@ -51,7 +54,7 @@ export default function BollettaTable({ bills: initialBills }: Props) {
       alert('Errore durante l\'eliminazione: ' + error.message)
       return
     }
-    setBills((prev) => prev.filter((b) => b.id !== id))
+    setDeletedIds((prev) => new Set(prev).add(id))
   }
 
   async function handleSeed() {
@@ -67,14 +70,13 @@ export default function BollettaTable({ bills: initialBills }: Props) {
       <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-10 text-center">
         <p className="text-[#bbcabf] text-sm mb-4">Nessuna bolletta trovata.</p>
         <div className="flex items-center justify-center gap-3">
-          
-          <a
+          <Link
             href="/inserisci"
             className="inline-flex items-center gap-2 bg-[#10b981] hover:bg-[#4edea3] text-[#003824] font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
           >
             <span className="material-symbols-outlined text-[18px]">add</span>
             Inserisci la prima bolletta
-          </a>
+          </Link>
           <button
             onClick={handleSeed}
             disabled={seeding}
@@ -131,14 +133,13 @@ export default function BollettaTable({ bills: initialBills }: Props) {
                   </td>
                   <td className="px-6 py-3.5 text-right">
                     <div className="flex items-center justify-end gap-1.5">
-                      
-                      <a
+                      <Link
                         href={`/bollette/${b.id}`}
                         className="p-1.5 rounded-lg text-[#bbcabf] hover:text-[#4edea3] hover:bg-[#4edea3]/10 transition-colors"
                         title="Modifica"
                       >
                         <span className="material-symbols-outlined text-[18px]">edit</span>
-                      </a>
+                      </Link>
                       <button
                         onClick={() => handleDelete(b.id)}
                         disabled={deletingId === b.id}

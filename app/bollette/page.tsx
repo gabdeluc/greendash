@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase-servers'
 import Sidebar from '@/components/ui/Sidebar'
 import BollettaTable from '@/components/bollette/BollettaTable'
+import type { BillRow } from '@/lib/types'
 
 export default async function BollettePage() {
   const supabase = await createServerSupabaseClient()
@@ -14,7 +16,7 @@ export default async function BollettePage() {
     .order('year', { ascending: false })
     .order('month', { ascending: false })
 
-  const bills = (data ?? []).map((b: any) => ({
+  const bills = (data ?? []).map((b: BillRow) => ({
     id: b.id,
     type: b.type,
     month: Number(b.month),
@@ -37,14 +39,13 @@ export default async function BollettePage() {
             </span>
             <span className="text-[#4edea3] font-semibold text-lg tracking-tight">GreenDash</span>
           </div>
-          
-          <a
+          <Link
             href="/inserisci"
             className="flex items-center gap-2 bg-[#10b981] hover:bg-[#4edea3] text-[#003824] font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
           >
             <span className="material-symbols-outlined text-[18px]">add</span>
             Add Bill
-          </a>
+          </Link>
         </header>
 
         <main className="flex-1 p-8 max-w-[1280px] w-full">

@@ -1,10 +1,12 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase-servers'
 import Sidebar from '@/components/ui/Sidebar'
 import SparklineChart from '@/components/charts/SparklineChart'
 import SuggestionCard from '@/components/ui/SuggestionCard'
 import { getProjections } from '@/lib/projections'
 import { getSuggestions } from '@/lib/suggestion'
+import type { BillRow } from '@/lib/types'
 
 type Bill = {
   id: string; type: string; month: number
@@ -29,8 +31,7 @@ export default async function DashboardPage() {
     .order('year', { ascending: true })
     .order('month', { ascending: true })
 
-  // FIX: Aggiunto tipo esplicito (b: any)
-  const bills: Bill[] = (data ?? []).map((b: any) => ({
+  const bills: Bill[] = (data ?? []).map((b: BillRow) => ({
     id: b.id, type: b.type,
     month: Number(b.month), year: Number(b.year),
     amount_eur: Number(b.amount_eur),
@@ -52,10 +53,11 @@ export default async function DashboardPage() {
     return { value, trend, spark }
   }
 
-  // Projections totals (sum of next 3 months)
+  // proj è già tipizzato ProjectionPoint[] dal ritorno di getProjections,
+  // quindi TypeScript inferisce il tipo da solo: niente "any" da scrivere.
   function getProjectionTotal(type: string) {
     const proj = getProjections(bills, type)
-    return proj.filter((p: any) => p.isProjection).reduce((s: number, p: any) => s + p.value, 0)
+    return proj.filter((p) => p.isProjection).reduce((s, p) => s + p.value, 0)
   }
 
   const projTotals = {
@@ -82,13 +84,13 @@ export default async function DashboardPage() {
             <span className="text-[#4edea3] font-semibold text-lg tracking-tight">GreenDash</span>
           </div>
 
-          <a
+          <Link
             href="/inserisci"
             className="flex items-center gap-2 bg-[#10b981] hover:bg-[#4edea3] text-[#003824] font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
           >
             <span className="material-symbols-outlined text-[18px]">add</span>
             Add Bill
-          </a>
+          </Link>
         </header>
 
         {/* Content */}
@@ -200,8 +202,7 @@ export default async function DashboardPage() {
               <div className="mt-8">
                 <h2 className="font-semibold text-[#dde2f3] mb-4">AI Insights vs National Avg</h2>
                 <div className="space-y-3">
-                  {/* FIX: Aggiunti i tipi espliciti s: any e i: number */}
-                  {suggestions.map((s: any, i: number) => (
+                  {suggestions.map((s, i) => (
                     <SuggestionCard key={i} type={s.type} title={s.title} body={s.body} />
                   ))}
                 </div>

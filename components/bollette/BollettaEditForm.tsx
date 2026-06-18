@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 
 type Bill = {
@@ -212,13 +213,12 @@ export default function BillEditForm({ bill }: Props) {
         </button>
 
         <div className="flex items-center gap-3">
-          
-          <a
+          <Link
             href="/bollette"
             className="px-5 py-2.5 rounded-lg border border-[#3c4a42] text-[#bbcabf] hover:text-[#dde2f3] hover:border-[#86948a] text-sm font-medium transition-all"
           >
             Annulla
-          </a>
+          </Link>
           <button
             onClick={handleSubmit}
             disabled={loading || success}
