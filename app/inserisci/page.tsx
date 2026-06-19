@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Sidebar from '@/components/ui/Sidebar'
@@ -14,7 +15,6 @@ const UTILITY = [
   { type: 'telefono', label: 'Telefono', icon: 'call',                  color: '#a78bfa' },
 ]
 
-// Solo un default suggerito quando cambi tipo utenza: sempre modificabile.
 const DEFAULT_MONTHS_COVERED: Record<string, number> = {
   luce: 2, gas: 2, acqua: 3, telefono: 1,
 }
@@ -203,13 +203,12 @@ export default function InserisciPage() {
             )}
 
             <div className="border-t border-[#3c4a42] pt-6 flex items-center gap-3 justify-end">
-              
-              <a
+              <Link
                 href="/dashboard"
                 className="px-5 py-2.5 rounded-lg border border-[#3c4a42] text-[#bbcabf] hover:text-[#dde2f3] hover:border-[#86948a] text-sm font-medium transition-all"
               >
                 Annulla
-              </a>
+              </Link>
               <button
                 onClick={handleSubmit}
                 disabled={loading || success}
