@@ -1,4 +1,5 @@
 'use client'
+import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
@@ -7,6 +8,7 @@ type Props = { email: string }
 const navItems = [
   { href: '/dashboard', label: 'Dashboard',   icon: 'grid_view'    },
   { href: '/bollette',  label: 'Bollette',    icon: 'list_alt'     },
+  { href: '/contratti', label: 'Contratti',   icon: 'assignment'   },
   { href: '/inserisci', label: 'Insert Bill', icon: 'receipt_long' },
 ]
 
@@ -41,7 +43,7 @@ export default function Sidebar({ email }: Props) {
         {navItems.map(item => {
           const active = pathname === item.href
           return (
-            <a            
+            <Link
               key={item.href}
               href={item.href}
               className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
@@ -55,7 +57,7 @@ export default function Sidebar({ email }: Props) {
               )}
               <span className="material-symbols-outlined text-[20px]">{item.icon}</span>
               {item.label}
-            </a>
+            </Link>
           )
         })}
       </nav>

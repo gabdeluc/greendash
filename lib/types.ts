@@ -1,8 +1,7 @@
 import type { UtilityType } from './averages'
 
-// Riga "grezza" come arriva da Supabase, prima delle conversioni numeriche.
-// I numerici possono arrivare come stringa o numero a seconda del driver,
-// quindi li tipizziamo entrambi e li normalizziamo con Number(...) a valle.
+// Riga grezza della tabella bills come arriva da Supabase.
+// I numerici possono arrivare come string o number, normalizziamo con Number() a valle.
 export type BillRow = {
   id: string
   type: UtilityType
@@ -11,4 +10,16 @@ export type BillRow = {
   amount_eur: number | string
   kwh: number | string | null
   months_covered: number | string | null
+}
+
+// Riga grezza della tabella contracts come arriva da Supabase.
+export type ContractRow = {
+  id: string
+  type: UtilityType
+  provider_name: string
+  tariff_name: string | null
+  activation_date: string | null
+  renewal_date: string | null
+  monthly_eur: number | string | null
+  notes: string | null
 }

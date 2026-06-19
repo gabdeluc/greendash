@@ -23,12 +23,13 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  // getUser() verifica il token col server Supabase, a differenza di
-  // getSession() che si fida solo del cookie. Più sicuro per le route protette.
   const { data: { user } } = await supabase.auth.getUser()
 
-  const isProtected = request.nextUrl.pathname.startsWith('/dashboard') ||
-                      request.nextUrl.pathname.startsWith('/inserisci')
+  const isProtected =
+    request.nextUrl.pathname.startsWith('/dashboard') ||
+    request.nextUrl.pathname.startsWith('/inserisci') ||
+    request.nextUrl.pathname.startsWith('/bollette') ||
+    request.nextUrl.pathname.startsWith('/contratti')
 
   if (!user && isProtected) {
     return NextResponse.redirect(new URL('/login', request.url))
@@ -42,5 +43,11 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/inserisci/:path*', '/login'],
+  matcher: [
+    '/dashboard/:path*',
+    '/inserisci/:path*',
+    '/bollette/:path*',
+    '/contratti/:path*',
+    '/login',
+  ],
 }
