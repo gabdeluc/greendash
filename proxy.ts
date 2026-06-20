@@ -26,10 +26,11 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const isProtected =
-    request.nextUrl.pathname.startsWith('/dashboard') ||
-    request.nextUrl.pathname.startsWith('/inserisci') ||
-    request.nextUrl.pathname.startsWith('/bollette') ||
-    request.nextUrl.pathname.startsWith('/contratti')
+    request.nextUrl.pathname.startsWith('/dashboard')  ||
+    request.nextUrl.pathname.startsWith('/inserisci')  ||
+    request.nextUrl.pathname.startsWith('/bollette')   ||
+    request.nextUrl.pathname.startsWith('/contratti')  ||
+    request.nextUrl.pathname.startsWith('/statistiche')
 
   if (!user && isProtected) {
     return NextResponse.redirect(new URL('/login', request.url))
@@ -48,6 +49,7 @@ export const config = {
     '/inserisci/:path*',
     '/bollette/:path*',
     '/contratti/:path*',
+    '/statistiche/:path*',
     '/login',
   ],
 }
