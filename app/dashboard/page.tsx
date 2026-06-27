@@ -6,7 +6,8 @@ import SparklineChart from '@/components/charts/SparklineChart'
 import SuggestionCard from '@/components/ui/SuggestionCard'
 import { getProjections } from '@/lib/projections'
 import { getSuggestions } from '@/lib/suggestion'
-import type { BillRow } from '@/lib/types'
+import type { BillRow, BudgetRow } from '@/lib/types'
+import type { UtilityType } from '@/lib/averages'
 
 type Bill = {
   id: string; type: string; month: number
@@ -26,12 +27,12 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data } = await supabase
-    .from('bills').select('*')
-    .order('year', { ascending: true })
-    .order('month', { ascending: true })
+  const [{ data: billData }, { data: budgetData }] = await Promise.all([
+    supabase.from('bills').select('*').order('year', { ascending: true }).order('month', { ascending: true }),
+    supabase.from('budgets').select('type, monthly_eur'),
+  ])
 
-  const bills: Bill[] = (data ?? []).map((b: BillRow) => ({
+  const bills: Bill[] = (billData ?? []).map((b: BillRow) => ({
     id: b.id, type: b.type,
     month: Number(b.month), year: Number(b.year),
     amount_eur: Number(b.amount_eur),
@@ -39,22 +40,24 @@ export default async function DashboardPage() {
     months_covered: Number(b.months_covered ?? 1),
   }))
 
-  // KPI per utility
+  const budgetByType: Record<string, number> = {}
+  ;(budgetData ?? []).forEach((b: BudgetRow) => {
+    budgetByType[b.type] = Number(b.monthly_eur)
+  })
+
   function getKpi(type: string) {
     const typeBills = bills.filter(b => b.type === type).slice(-6)
     const last = typeBills[typeBills.length - 1]
     const prev = typeBills[typeBills.length - 2]
-    const value = last ? (type === 'luce' && last.kwh ? last.kwh : last.amount_eur) : 0
+    const value     = last ? (type === 'luce' && last.kwh ? last.kwh : last.amount_eur) : 0
     const prevValue = prev ? (type === 'luce' && prev.kwh ? prev.kwh : prev.amount_eur) : 0
-    const trend = prevValue > 0 ? ((value - prevValue) / prevValue) * 100 : 0
-    const spark = typeBills.map(b => ({
-      value: type === 'luce' && b.kwh ? b.kwh : b.amount_eur,
-    }))
-    return { value, trend, spark }
+    const trend     = prevValue > 0 ? ((value - prevValue) / prevValue) * 100 : 0
+    const spark     = typeBills.map(b => ({ value: type === 'luce' && b.kwh ? b.kwh : b.amount_eur }))
+    // Importo mensile equivalente dell'ultima bolletta (usato per confronto con budget)
+    const lastMonthlyEur = last ? last.amount_eur / (last.months_covered ?? 1) : 0
+    return { value, trend, spark, lastMonthlyEur }
   }
 
-  // proj è già tipizzato ProjectionPoint[] dal ritorno di getProjections,
-  // quindi TypeScript inferisce il tipo da solo: niente "any" da scrivere.
   function getProjectionTotal(type: string) {
     const proj = getProjections(bills, type)
     return proj.filter((p) => p.isProjection).reduce((s, p) => s + p.value, 0)
@@ -66,7 +69,7 @@ export default async function DashboardPage() {
     acqua:    getProjectionTotal('acqua'),
     telefono: getProjectionTotal('telefono'),
   }
-  const maxProj = Math.max(...Object.values(projTotals), 1)
+  const maxProj    = Math.max(...Object.values(projTotals), 1)
   const suggestions = getSuggestions(bills)
 
   return (
@@ -74,7 +77,6 @@ export default async function DashboardPage() {
       <Sidebar email={user.email ?? ''} />
 
       <div className="ml-[240px] min-h-screen flex flex-col">
-        {/* Topbar */}
         <header className="flex items-center justify-between px-8 py-4 border-b border-[#3c4a42] bg-[#0e131f] sticky top-0 z-10">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[#4edea3] text-2xl"
@@ -83,7 +85,6 @@ export default async function DashboardPage() {
             </span>
             <span className="text-[#4edea3] font-semibold text-lg tracking-tight">GreenDash</span>
           </div>
-
           <Link
             href="/inserisci"
             className="flex items-center gap-2 bg-[#10b981] hover:bg-[#4edea3] text-[#003824] font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
@@ -93,7 +94,6 @@ export default async function DashboardPage() {
           </Link>
         </header>
 
-        {/* Content */}
         <main className="flex-1 p-8 max-w-[1280px] w-full">
           <h1 className="text-2xl font-semibold tracking-tight mb-1">Overview</h1>
           <p className="text-[#bbcabf] text-sm mb-8">Current utility consumption and projections.</p>
@@ -102,8 +102,18 @@ export default async function DashboardPage() {
           <div className="grid grid-cols-4 gap-4 mb-6">
             {(['luce', 'gas', 'acqua', 'telefono'] as const).map(type => {
               const u = UTILITY[type]
-              const { value, trend, spark } = getKpi(type)
+              const { value, trend, spark, lastMonthlyEur } = getKpi(type)
               const trendUp = trend > 0
+              const budget  = budgetByType[type] ?? 0
+              // Percentuale speso/budget; null se budget non impostato o niente dati
+              const budgetPct = budget > 0 && lastMonthlyEur > 0
+                ? (lastMonthlyEur / budget) * 100
+                : null
+              const budgetColor = budgetPct === null ? '#4edea3'
+                : budgetPct > 100 ? '#f87171'
+                : budgetPct > 80  ? '#f59e0b'
+                : '#4edea3'
+
               return (
                 <div key={type} className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-5">
                   <div className="flex items-center justify-between mb-3">
@@ -126,6 +136,7 @@ export default async function DashboardPage() {
                       </span>
                     )}
                   </div>
+
                   <div className="flex items-baseline gap-1.5 mb-3">
                     <span className="text-3xl font-bold tracking-tight">
                       {value > 0 ? value.toFixed(0) : '—'}
@@ -134,8 +145,34 @@ export default async function DashboardPage() {
                       <span className="text-[#bbcabf] text-sm">{u.unit}</span>
                     )}
                   </div>
-                  {spark.length > 1 && (
-                    <SparklineChart data={spark} color={u.color} />
+
+                  {spark.length > 1 && <SparklineChart data={spark} color={u.color} />}
+
+                  {/* Budget progress bar — mostrata solo se budget è impostato */}
+                  {budget > 0 && (
+                    <div className="mt-3 pt-3 border-t border-[#3c4a42]">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[#bbcabf] text-[10px] uppercase tracking-wider">Budget</span>
+                        <span className="text-[10px] font-semibold" style={{ color: budgetColor }}>
+                          {lastMonthlyEur > 0 ? `€ ${lastMonthlyEur.toFixed(0)}` : '—'}
+                          {' '}/ € {budget.toFixed(0)}
+                        </span>
+                      </div>
+                      <div className="h-1 bg-[#242a36] rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${Math.min(budgetPct ?? 0, 100)}%`,
+                            background: budgetColor,
+                          }}
+                        />
+                      </div>
+                      {budgetPct !== null && budgetPct > 100 && (
+                        <p className="text-[10px] text-red-400 mt-1">
+                          +{(budgetPct - 100).toFixed(0)}% oltre il budget
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               )
@@ -144,7 +181,6 @@ export default async function DashboardPage() {
 
           {/* Charts + Projections */}
           <div className="grid grid-cols-3 gap-4 mb-4">
-            {/* Consumption chart */}
             <div className="col-span-2 bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="font-semibold text-[#dde2f3]">Consumption Trends</h2>
@@ -161,15 +197,14 @@ export default async function DashboardPage() {
               <ConsumptionChartWrapper bills={bills} />
             </div>
 
-            {/* Projections */}
             <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6">
               <h2 className="font-semibold text-[#dde2f3] mb-1">3-Month Projections</h2>
               <p className="text-[#bbcabf] text-xs mb-6">Estimated Q3 totals</p>
               <div className="space-y-6">
                 {(['luce', 'gas', 'acqua', 'telefono'] as const).map(type => {
-                  const u = UTILITY[type]
+                  const u     = UTILITY[type]
                   const total = projTotals[type]
-                  const pct = maxProj > 0 ? (total / maxProj) * 100 : 0
+                  const pct   = maxProj > 0 ? (total / maxProj) * 100 : 0
                   return (
                     <div key={type}>
                       <div className="flex items-center justify-between mb-2">
@@ -188,17 +223,14 @@ export default async function DashboardPage() {
                         </div>
                       </div>
                       <div className="h-1 bg-[#242a36] rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{ width: `${pct}%`, background: u.color }}
-                        />
+                        <div className="h-full rounded-full transition-all"
+                          style={{ width: `${pct}%`, background: u.color }} />
                       </div>
                     </div>
                   )
                 })}
               </div>
 
-              {/* AI Insights */}
               <div className="mt-8">
                 <h2 className="font-semibold text-[#dde2f3] mb-4">AI Insights vs National Avg</h2>
                 <div className="space-y-3">
@@ -215,9 +247,7 @@ export default async function DashboardPage() {
   )
 }
 
-// Wrapper per ConsumptionChart (client component)
 import ConsumptionChartInner from '@/components/charts/ConsumptionChart'
-
 function ConsumptionChartWrapper({ bills }: { bills: Bill[] }) {
   return <ConsumptionChartInner bills={bills} />
 }

@@ -1,7 +1,5 @@
 import type { UtilityType } from './averages'
 
-// Riga grezza della tabella bills come arriva da Supabase.
-// I numerici possono arrivare come string o number, normalizziamo con Number() a valle.
 export type BillRow = {
   id: string
   type: UtilityType
@@ -12,7 +10,6 @@ export type BillRow = {
   months_covered: number | string | null
 }
 
-// Riga grezza della tabella contracts come arriva da Supabase.
 export type ContractRow = {
   id: string
   type: UtilityType
@@ -22,4 +19,10 @@ export type ContractRow = {
   renewal_date: string | null
   monthly_eur: number | string | null
   notes: string | null
+}
+
+export type BudgetRow = {
+  id: string
+  type: UtilityType
+  monthly_eur: number | string
 }

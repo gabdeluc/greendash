@@ -11,9 +11,7 @@ export async function proxy(request: NextRequest) {
       cookies: {
         getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          )
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -26,16 +24,16 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const isProtected =
-    request.nextUrl.pathname.startsWith('/dashboard')  ||
-    request.nextUrl.pathname.startsWith('/inserisci')  ||
-    request.nextUrl.pathname.startsWith('/bollette')   ||
-    request.nextUrl.pathname.startsWith('/contratti')  ||
-    request.nextUrl.pathname.startsWith('/statistiche')
+    request.nextUrl.pathname.startsWith('/dashboard')   ||
+    request.nextUrl.pathname.startsWith('/inserisci')   ||
+    request.nextUrl.pathname.startsWith('/bollette')    ||
+    request.nextUrl.pathname.startsWith('/contratti')   ||
+    request.nextUrl.pathname.startsWith('/statistiche') ||
+    request.nextUrl.pathname.startsWith('/impostazioni')
 
   if (!user && isProtected) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
-
   if (user && request.nextUrl.pathname === '/login') {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
@@ -50,6 +48,7 @@ export const config = {
     '/bollette/:path*',
     '/contratti/:path*',
     '/statistiche/:path*',
+    '/impostazioni/:path*',
     '/login',
   ],
 }

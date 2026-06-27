@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import type { UtilityType } from '@/lib/averages'
 
@@ -17,44 +17,48 @@ type Bill = {
 
 type Props = { bills: Bill[] }
 
-const MONTHS = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic']
+const MONTHS     = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic']
+const MONTHS_FULL = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                     'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre']
 
-const UTILITY = {
+const UTILITY: Record<UtilityType, { label: string; icon: string; color: string }> = {
   luce:     { label: 'Luce',     icon: 'bolt',                  color: '#f59e0b' },
   gas:      { label: 'Gas',      icon: 'local_fire_department', color: '#f97316' },
   acqua:    { label: 'Acqua',    icon: 'water_drop',            color: '#3b82f6' },
   telefono: { label: 'Telefono', icon: 'call',                  color: '#a78bfa' },
-} as const
+}
 
 const FREQUENCY_LABEL: Record<number, string> = {
   1: 'Mensile', 2: 'Bimestrale', 3: 'Trimestrale', 4: 'Quadrimestrale',
 }
 
+const TYPES: UtilityType[] = ['luce', 'gas', 'acqua', 'telefono']
+
 export default function BollettaTable({ bills: initialBills }: Props) {
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [seeding, setSeeding] = useState(false)
+  const [seeding,    setSeeding]    = useState(false)
+  const [filterType, setFilterType] = useState<UtilityType | 'all'>('all')
+  const [filterYear, setFilterYear] = useState<number | 'all'>('all')
   const supabase = createClient()
-  const router = useRouter()
+  const router   = useRouter()
 
-  // Calcolato direttamente nel render, niente useEffect+setState: la fonte
-  // di verità resta la prop bills, qui togliamo solo le righe eliminate in
-  // questa sessione, per un feedback immediato senza aspettare il refresh.
-  const bills = initialBills.filter((b) => !deletedIds.has(b.id))
+  // Anni disponibili calcolati una sola volta dalla lista originale
+  const availableYears = [...new Set(initialBills.map(b => b.year))].sort((a, b) => b - a)
+
+  // Le bollette visibili tengono conto di eliminazioni locali + filtri attivi
+  const bills = initialBills
+    .filter(b => !deletedIds.has(b.id))
+    .filter(b => filterType === 'all' || b.type === filterType)
+    .filter(b => filterYear === 'all' || b.year === filterYear)
 
   async function handleDelete(id: string) {
-    const ok = window.confirm("Vuoi davvero eliminare questa bolletta? L'azione non è reversibile.")
-    if (!ok) return
-
+    if (!window.confirm("Vuoi davvero eliminare questa bolletta? L'azione non è reversibile.")) return
     setDeletingId(id)
     const { error } = await supabase.from('bills').delete().eq('id', id)
     setDeletingId(null)
-
-    if (error) {
-      alert('Errore durante l\'eliminazione: ' + error.message)
-      return
-    }
-    setDeletedIds((prev) => new Set(prev).add(id))
+    if (error) { alert('Errore: ' + error.message); return }
+    setDeletedIds(prev => new Set(prev).add(id))
   }
 
   async function handleSeed() {
@@ -65,7 +69,35 @@ export default function BollettaTable({ bills: initialBills }: Props) {
     else alert('Errore durante il caricamento dei dati demo.')
   }
 
-  if (bills.length === 0) {
+  function exportCSV() {
+    // Esportiamo TUTTE le bollette (senza filtri attivi), così il CSV è sempre completo
+    const rows = initialBills.filter(b => !deletedIds.has(b.id))
+    const headers = ['Tipo', 'Mese', 'Anno', 'Importo (€)', 'Consumo (kWh)', 'Cadenza']
+    const body = rows.map(b => [
+      UTILITY[b.type].label,
+      MONTHS_FULL[b.month - 1],
+      b.year,
+      b.amount_eur.toFixed(2),
+      b.kwh ?? '',
+      FREQUENCY_LABEL[b.months_covered] ?? `${b.months_covered} mesi`,
+    ])
+    // \uFEFF = BOM UTF-8, necessario affinché Excel riconosca correttamente le lettere accentate
+    const csv = '\uFEFF' + [headers, ...body]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `greendash-bollette-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  // Empty state: nessuna bolletta in assoluto
+  if (initialBills.length === 0) {
     return (
       <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-10 text-center">
         <p className="text-[#bbcabf] text-sm mb-4">Nessuna bolletta trovata.</p>
@@ -91,73 +123,147 @@ export default function BollettaTable({ bills: initialBills }: Props) {
   }
 
   return (
-    <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[#3c4a42] text-left text-[#bbcabf] text-[11px] uppercase tracking-wider">
-              <th className="px-6 py-3 font-semibold">Utenza</th>
-              <th className="px-6 py-3 font-semibold">Periodo</th>
-              <th className="px-6 py-3 font-semibold">Importo</th>
-              <th className="px-6 py-3 font-semibold">Consumo</th>
-              <th className="px-6 py-3 font-semibold text-right">Azioni</th>
-            </tr>
-          </thead>
-          <tbody>
-            {bills.map((b) => {
-              const u = UTILITY[b.type]
-              return (
-                <tr key={b.id} className="border-b border-[#3c4a42] last:border-0 hover:bg-[#242a36] transition-colors">
-                  <td className="px-6 py-3.5">
-                    <div className="flex items-center gap-2.5">
-                      <span className="material-symbols-outlined text-[18px]"
-                        style={{ color: u.color, fontVariationSettings: "'FILL' 1" }}>
-                        {u.icon}
-                      </span>
-                      <span className="text-[#dde2f3] font-medium">{u.label}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-3.5 text-[#bbcabf]">
-                    {MONTHS[b.month - 1]} {b.year}
-                    {b.months_covered > 1 && (
-                      <span className="block text-[10px] text-[#bbcabf]/70 mt-0.5">
-                        {FREQUENCY_LABEL[b.months_covered] ?? `${b.months_covered} mesi`}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-3.5 text-[#dde2f3] font-medium">
-                    € {b.amount_eur.toFixed(2)}
-                  </td>
-                  <td className="px-6 py-3.5 text-[#bbcabf]">
-                    {b.kwh ? `${b.kwh} kWh` : '—'}
-                  </td>
-                  <td className="px-6 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <Link
-                        href={`/bollette/${b.id}`}
-                        className="p-1.5 rounded-lg text-[#bbcabf] hover:text-[#4edea3] hover:bg-[#4edea3]/10 transition-colors"
-                        title="Modifica"
-                      >
-                        <span className="material-symbols-outlined text-[18px]">edit</span>
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(b.id)}
-                        disabled={deletingId === b.id}
-                        className="p-1.5 rounded-lg text-[#bbcabf] hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-50"
-                        title="Elimina"
-                      >
-                        <span className="material-symbols-outlined text-[18px]">
-                          {deletingId === b.id ? 'progress_activity' : 'delete'}
-                        </span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+    <div className="space-y-3">
+
+      {/* ── Barra filtri ───────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+
+        {/* Filtro tipo utenza */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            onClick={() => setFilterType('all')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all
+              ${filterType === 'all'
+                ? 'bg-[#4edea3]/10 text-[#4edea3] border-[#4edea3]/30'
+                : 'border-[#3c4a42] text-[#bbcabf] hover:text-[#dde2f3] hover:border-[#86948a]'}`}
+          >
+            Tutti
+          </button>
+          {TYPES.map(t => (
+            <button
+              key={t}
+              onClick={() => setFilterType(filterType === t ? 'all' : t)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all
+                ${filterType === t
+                  ? 'border-current'
+                  : 'border-[#3c4a42] text-[#bbcabf] hover:text-[#dde2f3] hover:border-[#86948a]'}`}
+              style={filterType === t
+                ? { color: UTILITY[t].color, background: `${UTILITY[t].color}15` }
+                : {}}
+            >
+              {UTILITY[t].label}
+            </button>
+          ))}
+        </div>
+
+        {/* Anno + Export */}
+        <div className="flex items-center gap-2">
+          <select
+            value={filterYear}
+            onChange={e => setFilterYear(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+            className="bg-[#0e131f] border border-[#3c4a42] rounded-lg px-3 py-1.5 text-[#dde2f3] text-xs focus:outline-none focus:border-[#4edea3] transition-colors appearance-none"
+          >
+            <option value="all">Tutti gli anni</option>
+            {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+
+          <button
+            onClick={exportCSV}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#3c4a42] text-[#bbcabf] hover:text-[#4edea3] hover:border-[#4edea3]/30 text-xs font-semibold transition-all"
+          >
+            <span className="material-symbols-outlined text-[15px]">download</span>
+            Export CSV
+          </button>
+        </div>
       </div>
+
+      {/* ── Tabella ────────────────────────────────────────────────────── */}
+      {bills.length === 0 ? (
+        <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-8 text-center">
+          <p className="text-[#bbcabf] text-sm">Nessuna bolletta corrisponde ai filtri selezionati.</p>
+          <button
+            onClick={() => { setFilterType('all'); setFilterYear('all') }}
+            className="mt-3 text-xs text-[#4edea3] hover:underline"
+          >
+            Azzera filtri
+          </button>
+        </div>
+      ) : (
+        <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl overflow-hidden">
+          <div className="px-6 py-3 border-b border-[#3c4a42]">
+            <p className="text-[#bbcabf] text-xs">
+              {bills.length} bollett{bills.length === 1 ? 'a' : 'e'}
+              {(filterType !== 'all' || filterYear !== 'all') && ' — filtrate'}
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#3c4a42] text-left text-[#bbcabf] text-[11px] uppercase tracking-wider">
+                  <th className="px-6 py-3 font-semibold">Utenza</th>
+                  <th className="px-6 py-3 font-semibold">Periodo</th>
+                  <th className="px-6 py-3 font-semibold">Importo</th>
+                  <th className="px-6 py-3 font-semibold">Consumo</th>
+                  <th className="px-6 py-3 font-semibold text-right">Azioni</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bills.map(b => {
+                  const u = UTILITY[b.type]
+                  return (
+                    <tr key={b.id} className="border-b border-[#3c4a42] last:border-0 hover:bg-[#242a36] transition-colors">
+                      <td className="px-6 py-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <span className="material-symbols-outlined text-[18px]"
+                            style={{ color: u.color, fontVariationSettings: "'FILL' 1" }}>
+                            {u.icon}
+                          </span>
+                          <span className="text-[#dde2f3] font-medium">{u.label}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-3.5 text-[#bbcabf]">
+                        {MONTHS[b.month - 1]} {b.year}
+                        {b.months_covered > 1 && (
+                          <span className="block text-[10px] text-[#bbcabf]/70 mt-0.5">
+                            {FREQUENCY_LABEL[b.months_covered] ?? `${b.months_covered} mesi`}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-3.5 text-[#dde2f3] font-medium">
+                        € {b.amount_eur.toFixed(2)}
+                      </td>
+                      <td className="px-6 py-3.5 text-[#bbcabf]">
+                        {b.kwh ? `${b.kwh} kWh` : '—'}
+                      </td>
+                      <td className="px-6 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Link
+                            href={`/bollette/${b.id}`}
+                            className="p-1.5 rounded-lg text-[#bbcabf] hover:text-[#4edea3] hover:bg-[#4edea3]/10 transition-colors"
+                            title="Modifica"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">edit</span>
+                          </Link>
+                          <button
+                            onClick={() => handleDelete(b.id)}
+                            disabled={deletingId === b.id}
+                            className="p-1.5 rounded-lg text-[#bbcabf] hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-50"
+                            title="Elimina"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">
+                              {deletingId === b.id ? 'progress_activity' : 'delete'}
+                            </span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
