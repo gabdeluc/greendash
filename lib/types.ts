@@ -21,8 +21,9 @@ export type ContractRow = {
   notes: string | null
 }
 
+// id è opzionale: molte query selezionano solo type + monthly_eur
 export type BudgetRow = {
-  id: string
+  id?: string
   type: UtilityType
   monthly_eur: number | string
 }

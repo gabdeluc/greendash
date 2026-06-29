@@ -10,7 +10,7 @@ const navItems = [
   { href: '/bollette',     label: 'Bollette',     icon: 'list_alt'     },
   { href: '/contratti',    label: 'Contratti',    icon: 'assignment'   },
   { href: '/statistiche',  label: 'Statistiche',  icon: 'bar_chart'    },
-  { href: '/inserisci',    label: 'Insert Bill',  icon: 'receipt_long' },
+  { href: '/inserisci',    label: 'Inserisci Bolletta',  icon: 'receipt_long' },
   { href: '/impostazioni', label: 'Impostazioni', icon: 'settings'     },
 ]
 

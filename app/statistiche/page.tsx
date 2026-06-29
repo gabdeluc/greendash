@@ -2,25 +2,30 @@ import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-servers'
 import Sidebar from '@/components/ui/Sidebar'
 import AnnualBarChart from '@/components/charts/AnnualBarChart'
+import SpendingPieChart from '@/components/charts/SpendingPieChart'
 import type { BillRow } from '@/lib/types'
 import type { UtilityType } from '@/lib/averages'
+import { getProjections } from '@/lib/projections'
+import type { ProjectionPoint } from '@/lib/projections'
+import ProjectionChartInner from '@/components/charts/ProjectionsChart'
 
 type Bill = {
   type: UtilityType
   year: number
+  month: number
   amount_eur: number
+  months_covered: number
 }
 
 type YearTotals = Record<UtilityType, number>
 
 const TYPES: UtilityType[] = ['luce', 'gas', 'acqua', 'telefono']
 
-const UTILITY_LABEL: Record<UtilityType, string> = {
-  luce: 'Luce', gas: 'Gas', acqua: 'Acqua', telefono: 'Telefono',
-}
-
-const UTILITY_COLOR: Record<UtilityType, string> = {
-  luce: '#f59e0b', gas: '#f97316', acqua: '#3b82f6', telefono: '#a78bfa',
+const UTILITY: Record<UtilityType, { label: string; icon: string; color: string }> = {
+  luce:     { label: 'Luce',     icon: 'bolt',                  color: '#f59e0b' },
+  gas:      { label: 'Gas',      icon: 'local_fire_department', color: '#f97316' },
+  acqua:    { label: 'Acqua',    icon: 'water_drop',            color: '#3b82f6' },
+  telefono: { label: 'Telefono', icon: 'call',                  color: '#a78bfa' },
 }
 
 export default async function StatistichePage() {
@@ -28,24 +33,28 @@ export default async function StatistichePage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Prendiamo tutti i campi necessari: year/amount per le stat,
+  // month/months_covered per le proiezioni
   const { data } = await supabase
     .from('bills')
-    .select('type, year, amount_eur')
+    .select('type, year, month, amount_eur, months_covered')
     .order('year', { ascending: true })
+    .order('month', { ascending: true })
 
   const bills: Bill[] = (data ?? []).map((b: BillRow) => ({
-    type:       b.type,
-    year:       Number(b.year),
-    amount_eur: Number(b.amount_eur),
+    type:           b.type,
+    year:           Number(b.year),
+    month:          Number(b.month),
+    amount_eur:     Number(b.amount_eur),
+    months_covered: Number(b.months_covered ?? 1),
   }))
 
-  // Raggruppa per anno: sommiamo gli importi raw (totale effettivo speso per anno)
+  // ── Totali per anno (bar chart + tabella) ────────────────────────────
   const yearMap: Record<number, YearTotals> = {}
   bills.forEach(b => {
     if (!yearMap[b.year]) yearMap[b.year] = { luce: 0, gas: 0, acqua: 0, telefono: 0 }
     yearMap[b.year][b.type] += b.amount_eur
   })
-
   const years = Object.keys(yearMap).map(Number).sort()
 
   const chartData = years.map(y => ({
@@ -62,6 +71,21 @@ export default async function StatistichePage() {
     if (!prev || prev[type] === 0) return null
     return ((curr[type] - prev[type]) / prev[type]) * 100
   }
+
+  // ── Distribuzione spesa (anno più recente) ───────────────────────────
+  const lastYear = years[years.length - 1]
+  const pieData = lastYear
+    ? TYPES.map(t => ({
+        name:  UTILITY[t].label,
+        value: Math.round(yearMap[lastYear][t] * 100) / 100,
+        color: UTILITY[t].color,
+      }))
+    : []
+
+  // ── Proiezioni per utenza ────────────────────────────────────────────
+  const projections = Object.fromEntries(
+    TYPES.map(t => [t, getProjections(bills, t)])
+  ) as Record<UtilityType, ProjectionPoint[]>
 
   return (
     <div className="min-h-screen bg-[#0e131f] text-[#dde2f3]">
@@ -81,7 +105,7 @@ export default async function StatistichePage() {
         <main className="flex-1 p-8 max-w-[1280px] w-full">
           <h1 className="text-2xl font-semibold tracking-tight mb-1">Statistiche Annuali</h1>
           <p className="text-[#bbcabf] text-sm mb-8">
-            Spesa totale per utenza per anno e confronto con l&apos;anno precedente.
+            Spesa per anno, distribuzione per utenza e proiezioni future.
           </p>
 
           {bills.length === 0 ? (
@@ -93,13 +117,60 @@ export default async function StatistichePage() {
           ) : (
             <div className="space-y-4">
 
-              {/* Bar chart */}
-              <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6">
-                <h2 className="font-semibold text-[#dde2f3] mb-6">Spesa totale per anno</h2>
-                <AnnualBarChart data={chartData} />
+              {/* ── Bar chart + Pie chart ─────────────────────────────── */}
+              <div className="grid grid-cols-3 gap-4">
+
+                {/* Bar chart: spesa totale per anno */}
+                <div className="col-span-2 bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6">
+                  <h2 className="font-semibold text-[#dde2f3] mb-6">Spesa totale per anno</h2>
+                  <AnnualBarChart data={chartData} />
+                </div>
+
+                {/* Donut: distribuzione anno corrente */}
+                <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6">
+                  <h2 className="font-semibold text-[#dde2f3] mb-1">Distribuzione spesa</h2>
+                  <p className="text-[#bbcabf] text-xs mb-4">
+                    Ripartizione per utenza nell&apos;anno più recente
+                  </p>
+                  <SpendingPieChart data={pieData} year={lastYear} />
+                </div>
               </div>
 
-              {/* Tabella riepilogativa */}
+              {/* ── Proiezioni per utenza ─────────────────────────────── */}
+              <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6">
+                <h2 className="font-semibold text-[#dde2f3] mb-1">
+                  Proiezioni prossimi 3 mesi
+                </h2>
+                <p className="text-[#bbcabf] text-xs mb-6">
+                  Stima basata sulla regressione lineare delle bollette precedenti.
+                  La linea tratteggiata indica i valori proiettati.
+                </p>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+                  {TYPES.map(type => {
+                    const u = UTILITY[type]
+                    return (
+                      <div key={type}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <span
+                            className="material-symbols-outlined text-[17px]"
+                            style={{ color: u.color, fontVariationSettings: "'FILL' 1" }}
+                          >
+                            {u.icon}
+                          </span>
+                          <span className="text-sm font-semibold text-[#dde2f3]">{u.label}</span>
+                        </div>
+                        <ProjectionChartWrapper
+                          data={projections[type]}
+                          color={u.color}
+                          label={u.label}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* ── Tabella YoY ───────────────────────────────────────── */}
               <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl overflow-hidden">
                 <div className="px-6 py-4 border-b border-[#3c4a42]">
                   <h2 className="font-semibold text-[#dde2f3]">Dettaglio per anno</h2>
@@ -113,8 +184,9 @@ export default async function StatistichePage() {
                       <tr className="border-b border-[#3c4a42] text-left text-[#bbcabf] text-[11px] uppercase tracking-wider">
                         <th className="px-6 py-3 font-semibold">Anno</th>
                         {TYPES.map(t => (
-                          <th key={t} className="px-6 py-3 font-semibold" style={{ color: UTILITY_COLOR[t] }}>
-                            {UTILITY_LABEL[t]}
+                          <th key={t} className="px-6 py-3 font-semibold"
+                            style={{ color: UTILITY[t].color }}>
+                            {UTILITY[t].label}
                           </th>
                         ))}
                         <th className="px-6 py-3 font-semibold text-[#dde2f3]">Totale</th>
@@ -122,17 +194,22 @@ export default async function StatistichePage() {
                     </thead>
                     <tbody>
                       {years.map(year => {
-                        const row   = yearMap[year]
-                        const total = TYPES.reduce((s, t) => s + row[t], 0)
+                        const row       = yearMap[year]
+                        const total     = TYPES.reduce((s, t) => s + row[t], 0)
                         const prevRow   = yearMap[year - 1]
-                        const prevTotal = prevRow ? TYPES.reduce((s, t) => s + prevRow[t], 0) : null
+                        const prevTotal = prevRow
+                          ? TYPES.reduce((s, t) => s + prevRow[t], 0)
+                          : null
                         const totalChange = prevTotal && prevTotal > 0
                           ? ((total - prevTotal) / prevTotal) * 100
                           : null
 
                         return (
-                          <tr key={year} className="border-b border-[#3c4a42] last:border-0 hover:bg-[#242a36] transition-colors">
-                            <td className="px-6 py-4 font-semibold text-[#dde2f3] text-base">{year}</td>
+                          <tr key={year}
+                            className="border-b border-[#3c4a42] last:border-0 hover:bg-[#242a36] transition-colors">
+                            <td className="px-6 py-4 font-semibold text-[#dde2f3] text-base">
+                              {year}
+                            </td>
 
                             {TYPES.map(t => {
                               const val    = row[t]
@@ -143,7 +220,8 @@ export default async function StatistichePage() {
                                     {val > 0 ? `€ ${val.toFixed(2)}` : '—'}
                                   </span>
                                   {change !== null && val > 0 && (
-                                    <span className={`ml-2 text-[10px] font-semibold ${change > 0 ? 'text-red-400' : 'text-[#4edea3]'}`}>
+                                    <span className={`ml-2 text-[10px] font-semibold
+                                      ${change > 0 ? 'text-red-400' : 'text-[#4edea3]'}`}>
                                       {change > 0 ? '▲' : '▼'} {Math.abs(change).toFixed(1)}%
                                     </span>
                                   )}
@@ -156,7 +234,8 @@ export default async function StatistichePage() {
                                 € {total.toFixed(2)}
                               </span>
                               {totalChange !== null && (
-                                <span className={`ml-2 text-[10px] font-semibold ${totalChange > 0 ? 'text-red-400' : 'text-[#4edea3]'}`}>
+                                <span className={`ml-2 text-[10px] font-semibold
+                                  ${totalChange > 0 ? 'text-red-400' : 'text-[#4edea3]'}`}>
                                   {totalChange > 0 ? '▲' : '▼'} {Math.abs(totalChange).toFixed(1)}%
                                 </span>
                               )}
@@ -175,4 +254,16 @@ export default async function StatistichePage() {
       </div>
     </div>
   )
+}
+
+// Wrapper necessario per usare il client component ProjectionChart
+// dall'interno di questo server component
+function ProjectionChartWrapper({
+  data, color, label,
+}: {
+  data: ProjectionPoint[]
+  color: string
+  label: string
+}) {
+  return <ProjectionChartInner data={data} color={color} label={label} />
 }
