@@ -6,7 +6,7 @@ import SparklineChart from '@/components/charts/SparklineChart'
 import SuggestionCard from '@/components/ui/SuggestionCard'
 import { getProjections } from '@/lib/projections'
 import { getSuggestions } from '@/lib/suggestion'
-import type { BillRow, BudgetRow, ContractRow } from '@/lib/types'
+import type { BillRow, BudgetRow, ContractRenewalRow } from '@/lib/types'
 import type { UtilityType } from '@/lib/averages'
 
 type Bill = {
@@ -55,16 +55,22 @@ export default async function DashboardPage() {
   })
 
   // ── Prossimi rinnovi contratti (entro 60 giorni, ordinati per urgenza) ──
+  // FIX: Date.now() calcolato UNA SOLA VOLTA prima del map, non ad ogni
+  // iterazione — chiamare funzioni "impure" (Date.now, Math.random, ecc.)
+  // dentro il corpo di una funzione eseguita durante il render viola le
+  // regole di purezza di React e genera l'errore "Cannot call impure function"
+  const nowMs = Date.now()
+
   const upcomingRenewals: UpcomingRenewal[] = (contractData ?? [])
-    .map((c: ContractRow) => {
+    .map((c: ContractRenewalRow) => {
       const daysLeft = Math.ceil(
-        (new Date(c.renewal_date!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+        (new Date(c.renewal_date).getTime() - nowMs) / (1000 * 60 * 60 * 24)
       )
       return {
         id: c.id,
         type: c.type,
         provider_name: c.provider_name,
-        renewal_date: c.renewal_date!,
+        renewal_date: c.renewal_date,
         daysLeft,
       }
     })

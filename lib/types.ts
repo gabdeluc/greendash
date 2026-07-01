@@ -21,7 +21,15 @@ export type ContractRow = {
   notes: string | null
 }
 
-// id è opzionale: molte query selezionano solo type + monthly_eur
+// Versione "leggera" di ContractRow, usata quando la query seleziona
+// solo i campi necessari per il widget dei rinnovi in dashboard
+export type ContractRenewalRow = {
+  id: string
+  type: UtilityType
+  provider_name: string
+  renewal_date: string
+}
+
 export type BudgetRow = {
   id?: string
   type: UtilityType
