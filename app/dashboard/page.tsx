@@ -6,13 +6,21 @@ import SparklineChart from '@/components/charts/SparklineChart'
 import SuggestionCard from '@/components/ui/SuggestionCard'
 import { getProjections } from '@/lib/projections'
 import { getSuggestions } from '@/lib/suggestion'
-import type { BillRow, BudgetRow } from '@/lib/types'
+import type { BillRow, BudgetRow, ContractRow } from '@/lib/types'
 import type { UtilityType } from '@/lib/averages'
 
 type Bill = {
   id: string; type: string; month: number
   year: number; amount_eur: number; kwh: number | null
   months_covered: number
+}
+
+type UpcomingRenewal = {
+  id: string
+  type: UtilityType
+  provider_name: string
+  renewal_date: string
+  daysLeft: number
 }
 
 const UTILITY = {
@@ -27,9 +35,10 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: billData }, { data: budgetData }] = await Promise.all([
+  const [{ data: billData }, { data: budgetData }, { data: contractData }] = await Promise.all([
     supabase.from('bills').select('*').order('year', { ascending: true }).order('month', { ascending: true }),
     supabase.from('budgets').select('type, monthly_eur'),
+    supabase.from('contracts').select('id, type, provider_name, renewal_date').not('renewal_date', 'is', null),
   ])
 
   const bills: Bill[] = (billData ?? []).map((b: BillRow) => ({
@@ -45,12 +54,29 @@ export default async function DashboardPage() {
     budgetByType[b.type] = Number(b.monthly_eur)
   })
 
+  // ── Prossimi rinnovi contratti (entro 60 giorni, ordinati per urgenza) ──
+  const upcomingRenewals: UpcomingRenewal[] = (contractData ?? [])
+    .map((c: ContractRow) => {
+      const daysLeft = Math.ceil(
+        (new Date(c.renewal_date!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+      )
+      return {
+        id: c.id,
+        type: c.type,
+        provider_name: c.provider_name,
+        renewal_date: c.renewal_date!,
+        daysLeft,
+      }
+    })
+    .filter((c) => c.daysLeft <= 60)
+    .sort((a, b) => a.daysLeft - b.daysLeft)
+    .slice(0, 3)
+
   // ── Annual summary ──────────────────────────────────────────────────
   const currentYear  = new Date().getFullYear()
-  const currentMonth = new Date().getMonth() + 1 // 1-12
+  const currentMonth = new Date().getMonth() + 1
   const yearBills    = bills.filter(b => b.year === currentYear)
   const totalThisYear = yearBills.reduce((s, b) => s + b.amount_eur, 0)
-  // Media = totale / mesi trascorsi nell'anno corrente
   const avgMonthly   = currentMonth > 0 ? totalThisYear / currentMonth : 0
   const highestBill  = yearBills.length > 0
     ? yearBills.reduce((max, b) => b.amount_eur > max.amount_eur ? b : max)
@@ -62,13 +88,10 @@ export default async function DashboardPage() {
     const last = typeBills[typeBills.length - 1]
     const prev = typeBills[typeBills.length - 2]
 
-    // Valore da mostrare: kWh grezzo per luce, importo grezzo per gli altri
     const value = last
       ? (type === 'luce' && last.kwh ? last.kwh : last.amount_eur)
       : 0
 
-    // FIX: normalizziamo a /mese prima di calcolare il trend,
-    // altrimenti bimestrale vs mensile produce % completamente sbagliate
     const toMonthly = (b: Bill) =>
       type === 'luce' && b.kwh
         ? b.kwh / b.months_covered
@@ -78,10 +101,7 @@ export default async function DashboardPage() {
     const prevMonthly = prev ? toMonthly(prev) : 0
     const trend = prevMonthly > 0 ? ((lastMonthly - prevMonthly) / prevMonthly) * 100 : 0
 
-    // Sparkline normalizzata per avere valori omogenei
     const spark = typeBills.map(b => ({ value: toMonthly(b) }))
-
-    // Per la progress bar del budget (€/mese equivalente)
     const lastMonthlyEur = last ? last.amount_eur / last.months_covered : 0
 
     return { value, trend, spark, lastMonthlyEur }
@@ -93,7 +113,6 @@ export default async function DashboardPage() {
     return proj.filter(p => p.isProjection).reduce((s, p) => s + p.value, 0)
   }
 
-  // Label dinamica per il periodo proiettato (es. "Lug 2025 – Set 2025")
   function getProjectionPeriod(type: string): string {
     const pts = getProjections(bills, type).filter(p => p.isProjection)
     if (pts.length === 0) return 'Proiezione'
@@ -135,6 +154,42 @@ export default async function DashboardPage() {
         <main className="flex-1 p-8 max-w-[1280px] w-full">
           <h1 className="text-2xl font-semibold tracking-tight mb-1">Overview</h1>
           <p className="text-[#bbcabf] text-sm mb-6">Current utility consumption and projections.</p>
+
+          {/* ── Alert rinnovi imminenti ────────────────────────────────── */}
+          {upcomingRenewals.length > 0 && (
+            <div className="bg-amber-400/5 border border-amber-400/25 rounded-xl px-5 py-4 mb-6 flex items-start gap-3">
+              <span className="material-symbols-outlined text-amber-400 text-[20px] mt-0.5"
+                style={{ fontVariationSettings: "'FILL' 1" }}>
+                event_upcoming
+              </span>
+              <div className="flex-1">
+                <p className="text-amber-400 text-sm font-semibold mb-2">Rinnovi contratto in scadenza</p>
+                <div className="space-y-1.5">
+                  {upcomingRenewals.map(r => {
+                    const u = UTILITY[r.type]
+                    return (
+                      <div key={r.id} className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="material-symbols-outlined text-[15px]"
+                            style={{ color: u.color, fontVariationSettings: "'FILL' 1" }}>
+                            {u.icon}
+                          </span>
+                          <span className="text-[#dde2f3]">{r.provider_name}</span>
+                          <span className="text-[#bbcabf] text-xs">({u.label})</span>
+                        </div>
+                        <span className={`text-xs font-semibold ${r.daysLeft < 0 ? 'text-red-400' : r.daysLeft <= 14 ? 'text-red-400' : 'text-amber-400'}`}>
+                          {r.daysLeft < 0 ? 'Scaduto' : `tra ${r.daysLeft} giorni`}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <Link href="/contratti" className="text-xs text-amber-400 hover:underline mt-2 inline-block">
+                  Vedi tutti i contratti →
+                </Link>
+              </div>
+            </div>
+          )}
 
           {/* ── Annual summary bar ─────────────────────────────────────── */}
           {bills.length > 0 && (
@@ -297,7 +352,6 @@ export default async function DashboardPage() {
                           <p className="text-sm font-semibold text-[#dde2f3]">
                             € {total > 0 ? total.toFixed(2) : '—'}
                           </p>
-                          {/* FIX: periodo dinamico invece di "Est. Q3 Total" hardcodato */}
                           <p className="text-[10px] text-[#bbcabf]">{period}</p>
                         </div>
                       </div>
