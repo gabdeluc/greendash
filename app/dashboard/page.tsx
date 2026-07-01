@@ -45,22 +45,60 @@ export default async function DashboardPage() {
     budgetByType[b.type] = Number(b.monthly_eur)
   })
 
+  // ── Annual summary ──────────────────────────────────────────────────
+  const currentYear  = new Date().getFullYear()
+  const currentMonth = new Date().getMonth() + 1 // 1-12
+  const yearBills    = bills.filter(b => b.year === currentYear)
+  const totalThisYear = yearBills.reduce((s, b) => s + b.amount_eur, 0)
+  // Media = totale / mesi trascorsi nell'anno corrente
+  const avgMonthly   = currentMonth > 0 ? totalThisYear / currentMonth : 0
+  const highestBill  = yearBills.length > 0
+    ? yearBills.reduce((max, b) => b.amount_eur > max.amount_eur ? b : max)
+    : null
+
+  // ── KPI per utility ─────────────────────────────────────────────────
   function getKpi(type: string) {
     const typeBills = bills.filter(b => b.type === type).slice(-6)
     const last = typeBills[typeBills.length - 1]
     const prev = typeBills[typeBills.length - 2]
-    const value     = last ? (type === 'luce' && last.kwh ? last.kwh : last.amount_eur) : 0
-    const prevValue = prev ? (type === 'luce' && prev.kwh ? prev.kwh : prev.amount_eur) : 0
-    const trend     = prevValue > 0 ? ((value - prevValue) / prevValue) * 100 : 0
-    const spark     = typeBills.map(b => ({ value: type === 'luce' && b.kwh ? b.kwh : b.amount_eur }))
-    // Importo mensile equivalente dell'ultima bolletta (usato per confronto con budget)
-    const lastMonthlyEur = last ? last.amount_eur / (last.months_covered ?? 1) : 0
+
+    // Valore da mostrare: kWh grezzo per luce, importo grezzo per gli altri
+    const value = last
+      ? (type === 'luce' && last.kwh ? last.kwh : last.amount_eur)
+      : 0
+
+    // FIX: normalizziamo a /mese prima di calcolare il trend,
+    // altrimenti bimestrale vs mensile produce % completamente sbagliate
+    const toMonthly = (b: Bill) =>
+      type === 'luce' && b.kwh
+        ? b.kwh / b.months_covered
+        : b.amount_eur / b.months_covered
+
+    const lastMonthly = last ? toMonthly(last) : 0
+    const prevMonthly = prev ? toMonthly(prev) : 0
+    const trend = prevMonthly > 0 ? ((lastMonthly - prevMonthly) / prevMonthly) * 100 : 0
+
+    // Sparkline normalizzata per avere valori omogenei
+    const spark = typeBills.map(b => ({ value: toMonthly(b) }))
+
+    // Per la progress bar del budget (€/mese equivalente)
+    const lastMonthlyEur = last ? last.amount_eur / last.months_covered : 0
+
     return { value, trend, spark, lastMonthlyEur }
   }
 
+  // ── Proiezioni ──────────────────────────────────────────────────────
   function getProjectionTotal(type: string) {
     const proj = getProjections(bills, type)
-    return proj.filter((p) => p.isProjection).reduce((s, p) => s + p.value, 0)
+    return proj.filter(p => p.isProjection).reduce((s, p) => s + p.value, 0)
+  }
+
+  // Label dinamica per il periodo proiettato (es. "Lug 2025 – Set 2025")
+  function getProjectionPeriod(type: string): string {
+    const pts = getProjections(bills, type).filter(p => p.isProjection)
+    if (pts.length === 0) return 'Proiezione'
+    if (pts.length === 1) return pts[0].label
+    return `${pts[0].label} – ${pts[pts.length - 1].label}`
   }
 
   const projTotals = {
@@ -69,7 +107,7 @@ export default async function DashboardPage() {
     acqua:    getProjectionTotal('acqua'),
     telefono: getProjectionTotal('telefono'),
   }
-  const maxProj    = Math.max(...Object.values(projTotals), 1)
+  const maxProj     = Math.max(...Object.values(projTotals), 1)
   const suggestions = getSuggestions(bills)
 
   return (
@@ -96,16 +134,59 @@ export default async function DashboardPage() {
 
         <main className="flex-1 p-8 max-w-[1280px] w-full">
           <h1 className="text-2xl font-semibold tracking-tight mb-1">Overview</h1>
-          <p className="text-[#bbcabf] text-sm mb-8">Current utility consumption and projections.</p>
+          <p className="text-[#bbcabf] text-sm mb-6">Current utility consumption and projections.</p>
 
-          {/* KPI Cards */}
+          {/* ── Annual summary bar ─────────────────────────────────────── */}
+          {bills.length > 0 && (
+            <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl px-6 py-4 mb-6 flex items-center gap-0 flex-wrap">
+              <div className="pr-8 mr-8 border-r border-[#3c4a42]">
+                <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-0.5">
+                  Spesa totale {currentYear}
+                </p>
+                <p className="text-[#dde2f3] text-xl font-bold">
+                  {totalThisYear > 0 ? `€ ${totalThisYear.toFixed(2)}` : '—'}
+                </p>
+              </div>
+              <div className="pr-8 mr-8 border-r border-[#3c4a42]">
+                <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-0.5">
+                  Media mensile
+                </p>
+                <p className="text-[#dde2f3] text-xl font-bold">
+                  {avgMonthly > 0 ? `€ ${avgMonthly.toFixed(0)}` : '—'}
+                </p>
+              </div>
+              <div className="pr-8 mr-8 border-r border-[#3c4a42]">
+                <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-0.5">
+                  Proiezione annuale
+                </p>
+                <p className="text-[#dde2f3] text-xl font-bold">
+                  {avgMonthly > 0 ? `€ ${(avgMonthly * 12).toFixed(0)}` : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-0.5">
+                  Bolletta più alta {currentYear}
+                </p>
+                <p className="text-[#dde2f3] text-xl font-bold">
+                  {highestBill ? `€ ${highestBill.amount_eur.toFixed(2)}` : '—'}
+                </p>
+                {highestBill && (
+                  <p className="text-[#bbcabf] text-[11px]">
+                    {UTILITY[highestBill.type as UtilityType]?.label}
+                    {highestBill.months_covered > 1 && ` · ${highestBill.months_covered} mesi`}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── KPI Cards ──────────────────────────────────────────────── */}
           <div className="grid grid-cols-4 gap-4 mb-6">
             {(['luce', 'gas', 'acqua', 'telefono'] as const).map(type => {
               const u = UTILITY[type]
               const { value, trend, spark, lastMonthlyEur } = getKpi(type)
-              const trendUp = trend > 0
-              const budget  = budgetByType[type] ?? 0
-              // Percentuale speso/budget; null se budget non impostato o niente dati
+              const trendUp   = trend > 0
+              const budget    = budgetByType[type] ?? 0
               const budgetPct = budget > 0 && lastMonthlyEur > 0
                 ? (lastMonthlyEur / budget) * 100
                 : null
@@ -148,23 +229,18 @@ export default async function DashboardPage() {
 
                   {spark.length > 1 && <SparklineChart data={spark} color={u.color} />}
 
-                  {/* Budget progress bar — mostrata solo se budget è impostato */}
                   {budget > 0 && (
                     <div className="mt-3 pt-3 border-t border-[#3c4a42]">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[#bbcabf] text-[10px] uppercase tracking-wider">Budget</span>
                         <span className="text-[10px] font-semibold" style={{ color: budgetColor }}>
-                          {lastMonthlyEur > 0 ? `€ ${lastMonthlyEur.toFixed(0)}` : '—'}
-                          {' '}/ € {budget.toFixed(0)}
+                          {lastMonthlyEur > 0 ? `€ ${lastMonthlyEur.toFixed(0)}` : '—'} / € {budget.toFixed(0)}
                         </span>
                       </div>
                       <div className="h-1 bg-[#242a36] rounded-full overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${Math.min(budgetPct ?? 0, 100)}%`,
-                            background: budgetColor,
-                          }}
+                          style={{ width: `${Math.min(budgetPct ?? 0, 100)}%`, background: budgetColor }}
                         />
                       </div>
                       {budgetPct !== null && budgetPct > 100 && (
@@ -179,7 +255,7 @@ export default async function DashboardPage() {
             })}
           </div>
 
-          {/* Charts + Projections */}
+          {/* ── Charts + Projections ───────────────────────────────────── */}
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div className="col-span-2 bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6">
               <div className="flex items-center justify-between mb-6">
@@ -199,12 +275,14 @@ export default async function DashboardPage() {
 
             <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6">
               <h2 className="font-semibold text-[#dde2f3] mb-1">3-Month Projections</h2>
-              <p className="text-[#bbcabf] text-xs mb-6">Estimated Q3 totals</p>
+              <p className="text-[#bbcabf] text-xs mb-6">Linear regression forecast</p>
+
               <div className="space-y-6">
                 {(['luce', 'gas', 'acqua', 'telefono'] as const).map(type => {
                   const u     = UTILITY[type]
                   const total = projTotals[type]
                   const pct   = maxProj > 0 ? (total / maxProj) * 100 : 0
+                  const period = getProjectionPeriod(type)
                   return (
                     <div key={type}>
                       <div className="flex items-center justify-between mb-2">
@@ -219,7 +297,8 @@ export default async function DashboardPage() {
                           <p className="text-sm font-semibold text-[#dde2f3]">
                             € {total > 0 ? total.toFixed(2) : '—'}
                           </p>
-                          <p className="text-[10px] text-[#bbcabf]">Est. Q3 Total</p>
+                          {/* FIX: periodo dinamico invece di "Est. Q3 Total" hardcodato */}
+                          <p className="text-[10px] text-[#bbcabf]">{period}</p>
                         </div>
                       </div>
                       <div className="h-1 bg-[#242a36] rounded-full overflow-hidden">
