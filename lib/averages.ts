@@ -25,3 +25,15 @@ export const NATIONAL_AVERAGES = {
 }
 
 export type UtilityType = keyof typeof NATIONAL_AVERAGES
+
+// Unità di misura del consumo per ciascuna utenza, usata in KPI e form.
+// Nota: a database il campo si chiama genericamente "kwh" e viene riusato
+// per Sm³ (gas) e m³ (acqua) — rinominarlo richiederebbe una migration,
+// per un progetto di questa dimensione non ne vale la pena; l'etichetta
+// mostrata all'utente è comunque sempre quella corretta grazie a questa mappa.
+export const CONSUMPTION_UNIT: Record<UtilityType, string | null> = {
+  luce: 'kWh',
+  gas: 'Sm³',
+  acqua: 'm³',
+  telefono: null,
+}

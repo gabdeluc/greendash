@@ -7,7 +7,7 @@ import SuggestionCard from '@/components/ui/SuggestionCard'
 import { getProjections } from '@/lib/projections'
 import { getSuggestions } from '@/lib/suggestion'
 import type { BillRow, BudgetRow, ContractRenewalRow } from '@/lib/types'
-import type { UtilityType } from '@/lib/averages'
+import { CONSUMPTION_UNIT, type UtilityType } from '@/lib/averages'
 
 type Bill = {
   id: string; type: string; month: number
@@ -24,10 +24,10 @@ type UpcomingRenewal = {
 }
 
 const UTILITY = {
-  luce:     { label: 'Electricity', icon: 'bolt',                  color: '#f59e0b', unit: 'kWh' },
-  gas:      { label: 'Gas',         icon: 'local_fire_department', color: '#f97316', unit: 'Sm³' },
-  acqua:    { label: 'Water',       icon: 'water_drop',            color: '#3b82f6', unit: 'm³'  },
-  telefono: { label: 'Telefono',    icon: 'call',                  color: '#a78bfa', unit: ''    },
+  luce:     { label: 'Electricity', icon: 'bolt',                  color: '#f59e0b' },
+  gas:      { label: 'Gas',         icon: 'local_fire_department', color: '#f97316' },
+  acqua:    { label: 'Water',       icon: 'water_drop',            color: '#3b82f6' },
+  telefono: { label: 'Telefono',    icon: 'call',                  color: '#a78bfa' },
 } as const
 
 export default async function DashboardPage() {
@@ -54,25 +54,14 @@ export default async function DashboardPage() {
     budgetByType[b.type] = Number(b.monthly_eur)
   })
 
-  // ── Prossimi rinnovi contratti (entro 60 giorni, ordinati per urgenza) ──
-  // FIX: Date.now() calcolato UNA SOLA VOLTA prima del map, non ad ogni
-  // iterazione — chiamare funzioni "impure" (Date.now, Math.random, ecc.)
-  // dentro il corpo di una funzione eseguita durante il render viola le
-  // regole di purezza di React e genera l'errore "Cannot call impure function"
+  // ── Prossimi rinnovi contratti (entro 60 giorni) ─────────────────────
   const nowMs = Date.now()
-
   const upcomingRenewals: UpcomingRenewal[] = (contractData ?? [])
     .map((c: ContractRenewalRow) => {
       const daysLeft = Math.ceil(
         (new Date(c.renewal_date).getTime() - nowMs) / (1000 * 60 * 60 * 24)
       )
-      return {
-        id: c.id,
-        type: c.type,
-        provider_name: c.provider_name,
-        renewal_date: c.renewal_date,
-        daysLeft,
-      }
+      return { id: c.id, type: c.type, provider_name: c.provider_name, renewal_date: c.renewal_date, daysLeft }
     })
     .filter((c) => c.daysLeft <= 60)
     .sort((a, b) => a.daysLeft - b.daysLeft)
@@ -89,28 +78,26 @@ export default async function DashboardPage() {
     : null
 
   // ── KPI per utility ─────────────────────────────────────────────────
-  function getKpi(type: string) {
+  // FIX: la spesa (€) è sempre il numero principale per QUALSIASI utenza —
+  // prima gas e acqua mostravano l'importo in euro etichettato erroneamente
+  // "Sm³"/"m³" perché solo luce veniva gestita come caso speciale.
+  // Il consumo (kWh/Sm³/m³) diventa un dato secondario, mai usato nei calcoli.
+  function getKpi(type: UtilityType) {
     const typeBills = bills.filter(b => b.type === type).slice(-6)
     const last = typeBills[typeBills.length - 1]
     const prev = typeBills[typeBills.length - 2]
 
-    const value = last
-      ? (type === 'luce' && last.kwh ? last.kwh : last.amount_eur)
-      : 0
+    const lastAmount = last ? last.amount_eur : 0
 
-    const toMonthly = (b: Bill) =>
-      type === 'luce' && b.kwh
-        ? b.kwh / b.months_covered
-        : b.amount_eur / b.months_covered
-
+    // Trend e sparkline SEMPRE normalizzati a mese, per confronto coerente
+    // tra bimestrale/trimestrale/mensile
+    const toMonthly = (b: Bill) => b.amount_eur / b.months_covered
     const lastMonthly = last ? toMonthly(last) : 0
     const prevMonthly = prev ? toMonthly(prev) : 0
     const trend = prevMonthly > 0 ? ((lastMonthly - prevMonthly) / prevMonthly) * 100 : 0
-
     const spark = typeBills.map(b => ({ value: toMonthly(b) }))
-    const lastMonthlyEur = last ? last.amount_eur / last.months_covered : 0
 
-    return { value, trend, spark, lastMonthlyEur }
+    return { lastAmount, trend, spark, lastMonthlyEur: lastMonthly, consumption: last?.kwh ?? null }
   }
 
   // ── Proiezioni ──────────────────────────────────────────────────────
@@ -161,7 +148,6 @@ export default async function DashboardPage() {
           <h1 className="text-2xl font-semibold tracking-tight mb-1">Overview</h1>
           <p className="text-[#bbcabf] text-sm mb-6">Current utility consumption and projections.</p>
 
-          {/* ── Alert rinnovi imminenti ────────────────────────────────── */}
           {upcomingRenewals.length > 0 && (
             <div className="bg-amber-400/5 border border-amber-400/25 rounded-xl px-5 py-4 mb-6 flex items-start gap-3">
               <span className="material-symbols-outlined text-amber-400 text-[20px] mt-0.5"
@@ -197,40 +183,23 @@ export default async function DashboardPage() {
             </div>
           )}
 
-          {/* ── Annual summary bar ─────────────────────────────────────── */}
           {bills.length > 0 && (
             <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl px-6 py-4 mb-6 flex items-center gap-0 flex-wrap">
               <div className="pr-8 mr-8 border-r border-[#3c4a42]">
-                <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-0.5">
-                  Spesa totale {currentYear}
-                </p>
-                <p className="text-[#dde2f3] text-xl font-bold">
-                  {totalThisYear > 0 ? `€ ${totalThisYear.toFixed(2)}` : '—'}
-                </p>
+                <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-0.5">Spesa totale {currentYear}</p>
+                <p className="text-[#dde2f3] text-xl font-bold">{totalThisYear > 0 ? `€ ${totalThisYear.toFixed(2)}` : '—'}</p>
               </div>
               <div className="pr-8 mr-8 border-r border-[#3c4a42]">
-                <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-0.5">
-                  Media mensile
-                </p>
-                <p className="text-[#dde2f3] text-xl font-bold">
-                  {avgMonthly > 0 ? `€ ${avgMonthly.toFixed(0)}` : '—'}
-                </p>
+                <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-0.5">Media mensile</p>
+                <p className="text-[#dde2f3] text-xl font-bold">{avgMonthly > 0 ? `€ ${avgMonthly.toFixed(0)}` : '—'}</p>
               </div>
               <div className="pr-8 mr-8 border-r border-[#3c4a42]">
-                <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-0.5">
-                  Proiezione annuale
-                </p>
-                <p className="text-[#dde2f3] text-xl font-bold">
-                  {avgMonthly > 0 ? `€ ${(avgMonthly * 12).toFixed(0)}` : '—'}
-                </p>
+                <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-0.5">Proiezione annuale</p>
+                <p className="text-[#dde2f3] text-xl font-bold">{avgMonthly > 0 ? `€ ${(avgMonthly * 12).toFixed(0)}` : '—'}</p>
               </div>
               <div>
-                <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-0.5">
-                  Bolletta più alta {currentYear}
-                </p>
-                <p className="text-[#dde2f3] text-xl font-bold">
-                  {highestBill ? `€ ${highestBill.amount_eur.toFixed(2)}` : '—'}
-                </p>
+                <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-0.5">Bolletta più alta {currentYear}</p>
+                <p className="text-[#dde2f3] text-xl font-bold">{highestBill ? `€ ${highestBill.amount_eur.toFixed(2)}` : '—'}</p>
                 {highestBill && (
                   <p className="text-[#bbcabf] text-[11px]">
                     {UTILITY[highestBill.type as UtilityType]?.label}
@@ -241,16 +210,14 @@ export default async function DashboardPage() {
             </div>
           )}
 
-          {/* ── KPI Cards ──────────────────────────────────────────────── */}
           <div className="grid grid-cols-4 gap-4 mb-6">
             {(['luce', 'gas', 'acqua', 'telefono'] as const).map(type => {
               const u = UTILITY[type]
-              const { value, trend, spark, lastMonthlyEur } = getKpi(type)
+              const unit = CONSUMPTION_UNIT[type]
+              const { lastAmount, trend, spark, lastMonthlyEur, consumption } = getKpi(type)
               const trendUp   = trend > 0
               const budget    = budgetByType[type] ?? 0
-              const budgetPct = budget > 0 && lastMonthlyEur > 0
-                ? (lastMonthlyEur / budget) * 100
-                : null
+              const budgetPct = budget > 0 && lastMonthlyEur > 0 ? (lastMonthlyEur / budget) * 100 : null
               const budgetColor = budgetPct === null ? '#4edea3'
                 : budgetPct > 100 ? '#f87171'
                 : budgetPct > 80  ? '#f59e0b'
@@ -267,9 +234,7 @@ export default async function DashboardPage() {
                           {u.icon}
                         </span>
                       </div>
-                      <span className="text-[#bbcabf] text-xs font-semibold uppercase tracking-wider">
-                        {u.label}
-                      </span>
+                      <span className="text-[#bbcabf] text-xs font-semibold uppercase tracking-wider">{u.label}</span>
                     </div>
                     {bills.length > 0 && (
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full
@@ -279,14 +244,15 @@ export default async function DashboardPage() {
                     )}
                   </div>
 
-                  <div className="flex items-baseline gap-1.5 mb-3">
+                  <div className="flex items-baseline gap-1.5 mb-0.5">
                     <span className="text-3xl font-bold tracking-tight">
-                      {value > 0 ? value.toFixed(0) : '—'}
+                      {lastAmount > 0 ? `€${lastAmount.toFixed(0)}` : '—'}
                     </span>
-                    {value > 0 && u.unit && (
-                      <span className="text-[#bbcabf] text-sm">{u.unit}</span>
-                    )}
                   </div>
+                  {/* Consumo mostrato come dato secondario, con l'unità corretta per tipo — mai usato nei calcoli */}
+                  <p className="text-[#bbcabf] text-[11px] mb-3 h-4">
+                    {consumption != null && unit ? `${consumption} ${unit}` : ''}
+                  </p>
 
                   {spark.length > 1 && <SparklineChart data={spark} color={u.color} />}
 
@@ -305,9 +271,7 @@ export default async function DashboardPage() {
                         />
                       </div>
                       {budgetPct !== null && budgetPct > 100 && (
-                        <p className="text-[10px] text-red-400 mt-1">
-                          +{(budgetPct - 100).toFixed(0)}% oltre il budget
-                        </p>
+                        <p className="text-[10px] text-red-400 mt-1">+{(budgetPct - 100).toFixed(0)}% oltre il budget</p>
                       )}
                     </div>
                   )}
@@ -316,7 +280,6 @@ export default async function DashboardPage() {
             })}
           </div>
 
-          {/* ── Charts + Projections ───────────────────────────────────── */}
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div className="col-span-2 bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6">
               <div className="flex items-center justify-between mb-6">
@@ -324,8 +287,7 @@ export default async function DashboardPage() {
                 <div className="flex items-center gap-4 text-xs text-[#bbcabf]">
                   {(['luce', 'gas', 'acqua', 'telefono'] as const).map(t => (
                     <span key={t} className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full inline-block"
-                        style={{ background: UTILITY[t].color }} />
+                      <span className="w-2 h-2 rounded-full inline-block" style={{ background: UTILITY[t].color }} />
                       {UTILITY[t].label}
                     </span>
                   ))}
@@ -355,15 +317,12 @@ export default async function DashboardPage() {
                           <span className="text-sm text-[#dde2f3]">{u.label}</span>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-semibold text-[#dde2f3]">
-                            € {total > 0 ? total.toFixed(2) : '—'}
-                          </p>
+                          <p className="text-sm font-semibold text-[#dde2f3]">€ {total > 0 ? total.toFixed(2) : '—'}</p>
                           <p className="text-[10px] text-[#bbcabf]">{period}</p>
                         </div>
                       </div>
                       <div className="h-1 bg-[#242a36] rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all"
-                          style={{ width: `${pct}%`, background: u.color }} />
+                        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: u.color }} />
                       </div>
                     </div>
                   )

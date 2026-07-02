@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Sidebar from '@/components/ui/Sidebar'
+import { useToast, Toast } from '@/components/ui/Toast'
+import { CONSUMPTION_UNIT, type UtilityType } from '@/lib/averages'
 
 const MONTHS = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
   'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre']
@@ -29,6 +31,7 @@ const FREQUENCY_OPTIONS = [
 export default function InserisciPage() {
   const supabase = createClient()
   const router   = useRouter()
+  const { toast, show } = useToast()
   const [email, setEmail]     = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -70,8 +73,14 @@ export default function InserisciPage() {
     if (!error) {
       setSuccess(true)
       setTimeout(() => { setSuccess(false); router.push('/dashboard') }, 1500)
+    } else {
+      // FIX: prima un errore Supabase falliva in silenzio, l'utente non
+      // capiva perché la bolletta non veniva salvata
+      show('error', 'Errore durante il salvataggio: ' + error.message)
     }
   }
+
+  const consumptionUnit = CONSUMPTION_UNIT[form.type as UtilityType]
 
   return (
     <div className="min-h-screen bg-[#0e131f] text-[#dde2f3]">
@@ -137,9 +146,7 @@ export default function InserisciPage() {
             <div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-2">
-                    Mese
-                  </label>
+                  <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-2">Mese</label>
                   <select
                     value={form.month}
                     onChange={e => set('month', e.target.value)}
@@ -149,9 +156,7 @@ export default function InserisciPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-2">
-                    Anno
-                  </label>
+                  <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-2">Anno</label>
                   <select
                     value={form.year}
                     onChange={e => set('year', e.target.value)}
@@ -169,9 +174,7 @@ export default function InserisciPage() {
             </div>
 
             <div>
-              <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-2">
-                Importo
-              </label>
+              <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider block mb-2">Importo</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#bbcabf] text-sm">€</span>
                 <input
@@ -184,13 +187,14 @@ export default function InserisciPage() {
               </div>
             </div>
 
-            {form.type !== 'telefono' && (
+            {consumptionUnit && (
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider">
                     Consumo (Opzionale)
                   </label>
-                  <span className="text-[#bbcabf] text-[11px]">kWh</span>
+                  {/* FIX: prima era hardcodato "kWh" anche per gas/acqua */}
+                  <span className="text-[#bbcabf] text-[11px]">{consumptionUnit}</span>
                 </div>
                 <input
                   type="number"
@@ -221,6 +225,8 @@ export default function InserisciPage() {
           </div>
         </main>
       </div>
+
+      <Toast toast={toast} />
     </div>
   )
 }

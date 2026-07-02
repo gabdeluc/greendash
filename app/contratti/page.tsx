@@ -25,19 +25,17 @@ const UTILITY: Record<UtilityType, { label: string; icon: string; color: string 
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleDateString('it-IT', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  })
+  return new Date(dateStr).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-function getRenewalBadge(renewalDate: string | null) {
+// FIX: nowMs passato come parametro invece di chiamare Date.now() qui dentro —
+// stesso principio già applicato in dashboard/page.tsx per coerenza
+function getRenewalBadge(renewalDate: string | null, nowMs: number) {
   if (!renewalDate) return null
-  const daysLeft = Math.ceil(
-    (new Date(renewalDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  )
-  if (daysLeft < 0)  return { label: 'Scaduto',          color: 'text-red-400',    bg: 'bg-red-400/10'    }
-  if (daysLeft <= 30) return { label: `${daysLeft} giorni`, color: 'text-amber-400', bg: 'bg-amber-400/10'  }
-  return               { label: formatDate(renewalDate), color: 'text-[#4edea3]',  bg: 'bg-[#4edea3]/10'  }
+  const daysLeft = Math.ceil((new Date(renewalDate).getTime() - nowMs) / (1000 * 60 * 60 * 24))
+  if (daysLeft < 0)   return { label: 'Scaduto',            color: 'text-red-400',   bg: 'bg-red-400/10'   }
+  if (daysLeft <= 30) return { label: `${daysLeft} giorni`, color: 'text-amber-400', bg: 'bg-amber-400/10' }
+  return                { label: formatDate(renewalDate),   color: 'text-[#4edea3]', bg: 'bg-[#4edea3]/10' }
 }
 
 const TYPES: UtilityType[] = ['luce', 'gas', 'acqua', 'telefono']
@@ -63,13 +61,14 @@ export default async function ContrattiPage() {
     notes:           c.notes,
   }))
 
-  // Teniamo il contratto più recente per tipo (la query è già DESC created_at)
   const byType: Record<UtilityType, Contract | null> = {
     luce:     contracts.find(c => c.type === 'luce')     ?? null,
     gas:      contracts.find(c => c.type === 'gas')      ?? null,
     acqua:    contracts.find(c => c.type === 'acqua')    ?? null,
     telefono: contracts.find(c => c.type === 'telefono') ?? null,
   }
+
+  const nowMs = Date.now()
 
   return (
     <div className="min-h-screen bg-[#0e131f] text-[#dde2f3]">
@@ -103,69 +102,46 @@ export default async function ContrattiPage() {
             {TYPES.map(type => {
               const u        = UTILITY[type]
               const contract = byType[type]
-              const badge    = contract ? getRenewalBadge(contract.renewal_date) : null
+              const badge    = contract ? getRenewalBadge(contract.renewal_date, nowMs) : null
 
               return (
                 <div key={type} className="bg-[#1a202c] border border-[#3c4a42] rounded-xl overflow-hidden">
-
-                  {/* Header colorato */}
-                  <div
-                    className="flex items-center justify-between px-5 py-3 border-b border-[#3c4a42]"
-                    style={{ background: `${u.color}0d` }}
-                  >
+                  <div className="flex items-center justify-between px-5 py-3 border-b border-[#3c4a42]"
+                    style={{ background: `${u.color}0d` }}>
                     <div className="flex items-center gap-2">
                       <span className="material-symbols-outlined text-[18px]"
                         style={{ color: u.color, fontVariationSettings: "'FILL' 1" }}>
                         {u.icon}
                       </span>
-                      <span className="text-sm font-semibold" style={{ color: u.color }}>
-                        {u.label}
-                      </span>
+                      <span className="text-sm font-semibold" style={{ color: u.color }}>{u.label}</span>
                     </div>
                     {contract ? (
-                      <Link
-                        href={`/contratti/${contract.id}`}
-                        className="flex items-center gap-1 text-xs text-[#bbcabf] hover:text-[#4edea3] transition-colors"
-                      >
+                      <Link href={`/contratti/${contract.id}`} className="flex items-center gap-1 text-xs text-[#bbcabf] hover:text-[#4edea3] transition-colors">
                         <span className="material-symbols-outlined text-[14px]">edit</span>
                         Modifica
                       </Link>
                     ) : (
-                      <Link
-                        href={`/contratti/new?type=${type}`}
-                        className="flex items-center gap-1 text-xs text-[#bbcabf] hover:text-[#4edea3] transition-colors"
-                      >
+                      <Link href={`/contratti/new?type=${type}`} className="flex items-center gap-1 text-xs text-[#bbcabf] hover:text-[#4edea3] transition-colors">
                         <span className="material-symbols-outlined text-[14px]">add</span>
                         Aggiungi
                       </Link>
                     )}
                   </div>
 
-                  {/* Body */}
                   {contract ? (
                     <div className="p-5 space-y-4">
                       <div>
-                        <p className="text-xl font-semibold text-[#dde2f3]">
-                          {contract.provider_name}
-                        </p>
-                        {contract.tariff_name && (
-                          <p className="text-[#bbcabf] text-sm mt-0.5">{contract.tariff_name}</p>
-                        )}
+                        <p className="text-xl font-semibold text-[#dde2f3]">{contract.provider_name}</p>
+                        {contract.tariff_name && <p className="text-[#bbcabf] text-sm mt-0.5">{contract.tariff_name}</p>}
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-1">
-                            Attivazione
-                          </p>
-                          <p className="text-sm text-[#dde2f3]">
-                            {formatDate(contract.activation_date)}
-                          </p>
+                          <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-1">Attivazione</p>
+                          <p className="text-sm text-[#dde2f3]">{formatDate(contract.activation_date)}</p>
                         </div>
                         <div>
-                          <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-1">
-                            Rinnovo
-                          </p>
+                          <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-1">Rinnovo</p>
                           {badge ? (
                             <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full ${badge.color} ${badge.bg}`}>
                               {badge.label}
@@ -176,29 +152,20 @@ export default async function ContrattiPage() {
                         </div>
                         {contract.monthly_eur !== null && (
                           <div>
-                            <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-1">
-                              Costo Stimato
-                            </p>
-                            <p className="text-sm text-[#dde2f3]">
-                              € {contract.monthly_eur.toFixed(2)}/mese
-                            </p>
+                            <p className="text-[#bbcabf] text-[10px] uppercase tracking-wider mb-1">Costo Stimato</p>
+                            <p className="text-sm text-[#dde2f3]">€ {contract.monthly_eur.toFixed(2)}/mese</p>
                           </div>
                         )}
                       </div>
 
                       {contract.notes && (
-                        <p className="text-[#bbcabf] text-xs leading-relaxed border-t border-[#3c4a42] pt-3">
-                          {contract.notes}
-                        </p>
+                        <p className="text-[#bbcabf] text-xs leading-relaxed border-t border-[#3c4a42] pt-3">{contract.notes}</p>
                       )}
                     </div>
                   ) : (
                     <div className="p-5 flex flex-col items-center justify-center text-center h-[140px]">
                       <p className="text-[#bbcabf] text-sm mb-3">Nessun contratto registrato</p>
-                      <Link
-                        href={`/contratti/new?type=${type}`}
-                        className="inline-flex items-center gap-1.5 text-sm text-[#4edea3] hover:text-[#6ffbbe] font-medium transition-colors"
-                      >
+                      <Link href={`/contratti/new?type=${type}`} className="inline-flex items-center gap-1.5 text-sm text-[#4edea3] hover:text-[#6ffbbe] font-medium transition-colors">
                         <span className="material-symbols-outlined text-[16px]">add_circle</span>
                         Aggiungi contratto
                       </Link>
