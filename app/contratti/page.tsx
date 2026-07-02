@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-servers'
 import Sidebar from '@/components/ui/Sidebar'
 import type { ContractRow } from '@/lib/types'
 import type { UtilityType } from '@/lib/averages'
+import { UTILITY_CONFIG, UTILITY_TYPES } from '@/lib/utility-config'
 
 type Contract = {
   id: string
@@ -16,20 +17,11 @@ type Contract = {
   notes: string | null
 }
 
-const UTILITY: Record<UtilityType, { label: string; icon: string; color: string }> = {
-  luce:     { label: 'Luce',     icon: 'bolt',                  color: '#f59e0b' },
-  gas:      { label: 'Gas',      icon: 'local_fire_department', color: '#f97316' },
-  acqua:    { label: 'Acqua',    icon: 'water_drop',            color: '#3b82f6' },
-  telefono: { label: 'Telefono', icon: 'call',                  color: '#a78bfa' },
-}
-
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—'
   return new Date(dateStr).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-// FIX: nowMs passato come parametro invece di chiamare Date.now() qui dentro —
-// stesso principio già applicato in dashboard/page.tsx per coerenza
 function getRenewalBadge(renewalDate: string | null, nowMs: number) {
   if (!renewalDate) return null
   const daysLeft = Math.ceil((new Date(renewalDate).getTime() - nowMs) / (1000 * 60 * 60 * 24))
@@ -37,8 +29,6 @@ function getRenewalBadge(renewalDate: string | null, nowMs: number) {
   if (daysLeft <= 30) return { label: `${daysLeft} giorni`, color: 'text-amber-400', bg: 'bg-amber-400/10' }
   return                { label: formatDate(renewalDate),   color: 'text-[#4edea3]', bg: 'bg-[#4edea3]/10' }
 }
-
-const TYPES: UtilityType[] = ['luce', 'gas', 'acqua', 'telefono']
 
 export default async function ContrattiPage() {
   const supabase = await createServerSupabaseClient()
@@ -99,8 +89,8 @@ export default async function ContrattiPage() {
           </p>
 
           <div className="grid grid-cols-2 gap-4">
-            {TYPES.map(type => {
-              const u        = UTILITY[type]
+            {UTILITY_TYPES.map(type => {
+              const u        = UTILITY_CONFIG[type]
               const contract = byType[type]
               const badge    = contract ? getRenewalBadge(contract.renewal_date, nowMs) : null
 

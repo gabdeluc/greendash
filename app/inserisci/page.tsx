@@ -6,16 +6,10 @@ import { useRouter } from 'next/navigation'
 import Sidebar from '@/components/ui/Sidebar'
 import { useToast, Toast } from '@/components/ui/Toast'
 import { CONSUMPTION_UNIT, type UtilityType } from '@/lib/averages'
+import { UTILITY_LIST } from '@/lib/utility-config'
 
 const MONTHS = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
   'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre']
-
-const UTILITY = [
-  { type: 'luce',     label: 'Luce',     icon: 'bolt',                  color: '#f59e0b' },
-  { type: 'gas',      label: 'Gas',      icon: 'local_fire_department', color: '#f97316' },
-  { type: 'acqua',    label: 'Acqua',    icon: 'water_drop',            color: '#3b82f6' },
-  { type: 'telefono', label: 'Telefono', icon: 'call',                  color: '#a78bfa' },
-]
 
 const DEFAULT_MONTHS_COVERED: Record<string, number> = {
   luce: 2, gas: 2, acqua: 3, telefono: 1,
@@ -74,8 +68,6 @@ export default function InserisciPage() {
       setSuccess(true)
       setTimeout(() => { setSuccess(false); router.push('/dashboard') }, 1500)
     } else {
-      // FIX: prima un errore Supabase falliva in silenzio, l'utente non
-      // capiva perché la bolletta non veniva salvata
       show('error', 'Errore durante il salvataggio: ' + error.message)
     }
   }
@@ -110,7 +102,7 @@ export default function InserisciPage() {
                 Tipo Utenza
               </label>
               <div className="grid grid-cols-4 gap-3">
-                {UTILITY.map(u => (
+                {UTILITY_LIST.map(u => (
                   <button
                     key={u.type}
                     onClick={() => selectType(u.type)}
@@ -193,7 +185,6 @@ export default function InserisciPage() {
                   <label className="text-[#bbcabf] text-[11px] font-semibold uppercase tracking-wider">
                     Consumo (Opzionale)
                   </label>
-                  {/* FIX: prima era hardcodato "kWh" anche per gas/acqua */}
                   <span className="text-[#bbcabf] text-[11px]">{consumptionUnit}</span>
                 </div>
                 <input

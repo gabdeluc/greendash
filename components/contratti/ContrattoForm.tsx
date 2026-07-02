@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useToast, Toast } from '@/components/ui/Toast'
+import { UTILITY_LIST } from '@/lib/utility-config'
 
 type FormState = {
   id?: string
@@ -20,13 +21,6 @@ type Props = {
   initial?: FormState
   defaultType?: string
 }
-
-const UTILITY = [
-  { type: 'luce',     label: 'Luce',     icon: 'bolt',                  color: '#f59e0b' },
-  { type: 'gas',      label: 'Gas',      icon: 'local_fire_department', color: '#f97316' },
-  { type: 'acqua',    label: 'Acqua',    icon: 'water_drop',            color: '#3b82f6' },
-  { type: 'telefono', label: 'Telefono', icon: 'call',                  color: '#a78bfa' },
-]
 
 export default function ContrattoForm({ initial, defaultType = 'luce' }: Props) {
   const supabase = createClient()
@@ -105,7 +99,7 @@ export default function ContrattoForm({ initial, defaultType = 'luce' }: Props) 
             Tipo Utenza
           </label>
           <div className="grid grid-cols-4 gap-3">
-            {UTILITY.map(u => (
+            {UTILITY_LIST.map(u => (
               <button
                 key={u.type}
                 onClick={() => set('type', u.type)}

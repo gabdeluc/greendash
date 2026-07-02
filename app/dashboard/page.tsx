@@ -8,6 +8,7 @@ import { getProjections } from '@/lib/projections'
 import { getSuggestions } from '@/lib/suggestion'
 import type { BillRow, BudgetRow, ContractRenewalRow } from '@/lib/types'
 import { CONSUMPTION_UNIT, type UtilityType } from '@/lib/averages'
+import { UTILITY_CONFIG, UTILITY_TYPES } from '@/lib/utility-config'
 
 type Bill = {
   id: string; type: string; month: number
@@ -22,13 +23,6 @@ type UpcomingRenewal = {
   renewal_date: string
   daysLeft: number
 }
-
-const UTILITY = {
-  luce:     { label: 'Electricity', icon: 'bolt',                  color: '#f59e0b' },
-  gas:      { label: 'Gas',         icon: 'local_fire_department', color: '#f97316' },
-  acqua:    { label: 'Water',       icon: 'water_drop',            color: '#3b82f6' },
-  telefono: { label: 'Telefono',    icon: 'call',                  color: '#a78bfa' },
-} as const
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient()
@@ -78,10 +72,6 @@ export default async function DashboardPage() {
     : null
 
   // ── KPI per utility ─────────────────────────────────────────────────
-  // FIX: la spesa (€) è sempre il numero principale per QUALSIASI utenza —
-  // prima gas e acqua mostravano l'importo in euro etichettato erroneamente
-  // "Sm³"/"m³" perché solo luce veniva gestita come caso speciale.
-  // Il consumo (kWh/Sm³/m³) diventa un dato secondario, mai usato nei calcoli.
   function getKpi(type: UtilityType) {
     const typeBills = bills.filter(b => b.type === type).slice(-6)
     const last = typeBills[typeBills.length - 1]
@@ -89,8 +79,6 @@ export default async function DashboardPage() {
 
     const lastAmount = last ? last.amount_eur : 0
 
-    // Trend e sparkline SEMPRE normalizzati a mese, per confronto coerente
-    // tra bimestrale/trimestrale/mensile
     const toMonthly = (b: Bill) => b.amount_eur / b.months_covered
     const lastMonthly = last ? toMonthly(last) : 0
     const prevMonthly = prev ? toMonthly(prev) : 0
@@ -158,7 +146,7 @@ export default async function DashboardPage() {
                 <p className="text-amber-400 text-sm font-semibold mb-2">Rinnovi contratto in scadenza</p>
                 <div className="space-y-1.5">
                   {upcomingRenewals.map(r => {
-                    const u = UTILITY[r.type]
+                    const u = UTILITY_CONFIG[r.type]
                     return (
                       <div key={r.id} className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
@@ -202,7 +190,7 @@ export default async function DashboardPage() {
                 <p className="text-[#dde2f3] text-xl font-bold">{highestBill ? `€ ${highestBill.amount_eur.toFixed(2)}` : '—'}</p>
                 {highestBill && (
                   <p className="text-[#bbcabf] text-[11px]">
-                    {UTILITY[highestBill.type as UtilityType]?.label}
+                    {UTILITY_CONFIG[highestBill.type as UtilityType]?.label}
                     {highestBill.months_covered > 1 && ` · ${highestBill.months_covered} mesi`}
                   </p>
                 )}
@@ -211,8 +199,8 @@ export default async function DashboardPage() {
           )}
 
           <div className="grid grid-cols-4 gap-4 mb-6">
-            {(['luce', 'gas', 'acqua', 'telefono'] as const).map(type => {
-              const u = UTILITY[type]
+            {UTILITY_TYPES.map(type => {
+              const u = UTILITY_CONFIG[type]
               const unit = CONSUMPTION_UNIT[type]
               const { lastAmount, trend, spark, lastMonthlyEur, consumption } = getKpi(type)
               const trendUp   = trend > 0
@@ -249,7 +237,6 @@ export default async function DashboardPage() {
                       {lastAmount > 0 ? `€${lastAmount.toFixed(0)}` : '—'}
                     </span>
                   </div>
-                  {/* Consumo mostrato come dato secondario, con l'unità corretta per tipo — mai usato nei calcoli */}
                   <p className="text-[#bbcabf] text-[11px] mb-3 h-4">
                     {consumption != null && unit ? `${consumption} ${unit}` : ''}
                   </p>
@@ -285,10 +272,10 @@ export default async function DashboardPage() {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="font-semibold text-[#dde2f3]">Consumption Trends</h2>
                 <div className="flex items-center gap-4 text-xs text-[#bbcabf]">
-                  {(['luce', 'gas', 'acqua', 'telefono'] as const).map(t => (
+                  {UTILITY_TYPES.map(t => (
                     <span key={t} className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full inline-block" style={{ background: UTILITY[t].color }} />
-                      {UTILITY[t].label}
+                      <span className="w-2 h-2 rounded-full inline-block" style={{ background: UTILITY_CONFIG[t].color }} />
+                      {UTILITY_CONFIG[t].label}
                     </span>
                   ))}
                 </div>
@@ -301,8 +288,8 @@ export default async function DashboardPage() {
               <p className="text-[#bbcabf] text-xs mb-6">Linear regression forecast</p>
 
               <div className="space-y-6">
-                {(['luce', 'gas', 'acqua', 'telefono'] as const).map(type => {
-                  const u     = UTILITY[type]
+                {UTILITY_TYPES.map(type => {
+                  const u     = UTILITY_CONFIG[type]
                   const total = projTotals[type]
                   const pct   = maxProj > 0 ? (total / maxProj) * 100 : 0
                   const period = getProjectionPeriod(type)

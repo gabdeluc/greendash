@@ -5,6 +5,7 @@ import AnnualBarChart from '@/components/charts/AnnualBarChart'
 import SpendingPieChart from '@/components/charts/SpendingPieChart'
 import type { BillRow } from '@/lib/types'
 import type { UtilityType } from '@/lib/averages'
+import { UTILITY_CONFIG, UTILITY_TYPES } from '@/lib/utility-config'
 import { getProjections } from '@/lib/projections'
 import type { ProjectionPoint } from '@/lib/projections'
 import ProjectionChartInner from '@/components/charts/ProjectionsChart'
@@ -19,22 +20,11 @@ type Bill = {
 
 type YearTotals = Record<UtilityType, number>
 
-const TYPES: UtilityType[] = ['luce', 'gas', 'acqua', 'telefono']
-
-const UTILITY: Record<UtilityType, { label: string; icon: string; color: string }> = {
-  luce:     { label: 'Luce',     icon: 'bolt',                  color: '#f59e0b' },
-  gas:      { label: 'Gas',      icon: 'local_fire_department', color: '#f97316' },
-  acqua:    { label: 'Acqua',    icon: 'water_drop',            color: '#3b82f6' },
-  telefono: { label: 'Telefono', icon: 'call',                  color: '#a78bfa' },
-}
-
 export default async function StatistichePage() {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Prendiamo tutti i campi necessari: year/amount per le stat,
-  // month/months_covered per le proiezioni
   const { data } = await supabase
     .from('bills')
     .select('type, year, month, amount_eur, months_covered')
@@ -49,7 +39,6 @@ export default async function StatistichePage() {
     months_covered: Number(b.months_covered ?? 1),
   }))
 
-  // ── Totali per anno (bar chart + tabella) ────────────────────────────
   const yearMap: Record<number, YearTotals> = {}
   bills.forEach(b => {
     if (!yearMap[b.year]) yearMap[b.year] = { luce: 0, gas: 0, acqua: 0, telefono: 0 }
@@ -72,19 +61,17 @@ export default async function StatistichePage() {
     return ((curr[type] - prev[type]) / prev[type]) * 100
   }
 
-  // ── Distribuzione spesa (anno più recente) ───────────────────────────
   const lastYear = years[years.length - 1]
   const pieData = lastYear
-    ? TYPES.map(t => ({
-        name:  UTILITY[t].label,
+    ? UTILITY_TYPES.map(t => ({
+        name:  UTILITY_CONFIG[t].label,
         value: Math.round(yearMap[lastYear][t] * 100) / 100,
-        color: UTILITY[t].color,
+        color: UTILITY_CONFIG[t].color,
       }))
     : []
 
-  // ── Proiezioni per utenza ────────────────────────────────────────────
   const projections = Object.fromEntries(
-    TYPES.map(t => [t, getProjections(bills, t)])
+    UTILITY_TYPES.map(t => [t, getProjections(bills, t)])
   ) as Record<UtilityType, ProjectionPoint[]>
 
   return (
@@ -117,16 +104,12 @@ export default async function StatistichePage() {
           ) : (
             <div className="space-y-4">
 
-              {/* ── Bar chart + Pie chart ─────────────────────────────── */}
               <div className="grid grid-cols-3 gap-4">
-
-                {/* Bar chart: spesa totale per anno */}
                 <div className="col-span-2 bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6">
                   <h2 className="font-semibold text-[#dde2f3] mb-6">Spesa totale per anno</h2>
                   <AnnualBarChart data={chartData} />
                 </div>
 
-                {/* Donut: distribuzione anno corrente */}
                 <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6">
                   <h2 className="font-semibold text-[#dde2f3] mb-1">Distribuzione spesa</h2>
                   <p className="text-[#bbcabf] text-xs mb-4">
@@ -136,7 +119,6 @@ export default async function StatistichePage() {
                 </div>
               </div>
 
-              {/* ── Proiezioni per utenza ─────────────────────────────── */}
               <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl p-6">
                 <h2 className="font-semibold text-[#dde2f3] mb-1">
                   Proiezioni prossimi 3 mesi
@@ -146,8 +128,8 @@ export default async function StatistichePage() {
                   La linea tratteggiata indica i valori proiettati.
                 </p>
                 <div className="grid grid-cols-2 gap-x-8 gap-y-6">
-                  {TYPES.map(type => {
-                    const u = UTILITY[type]
+                  {UTILITY_TYPES.map(type => {
+                    const u = UTILITY_CONFIG[type]
                     return (
                       <div key={type}>
                         <div className="flex items-center gap-2 mb-3">
@@ -170,7 +152,6 @@ export default async function StatistichePage() {
                 </div>
               </div>
 
-              {/* ── Tabella YoY ───────────────────────────────────────── */}
               <div className="bg-[#1a202c] border border-[#3c4a42] rounded-xl overflow-hidden">
                 <div className="px-6 py-4 border-b border-[#3c4a42]">
                   <h2 className="font-semibold text-[#dde2f3]">Dettaglio per anno</h2>
@@ -183,10 +164,10 @@ export default async function StatistichePage() {
                     <thead>
                       <tr className="border-b border-[#3c4a42] text-left text-[#bbcabf] text-[11px] uppercase tracking-wider">
                         <th className="px-6 py-3 font-semibold">Anno</th>
-                        {TYPES.map(t => (
+                        {UTILITY_TYPES.map(t => (
                           <th key={t} className="px-6 py-3 font-semibold"
-                            style={{ color: UTILITY[t].color }}>
-                            {UTILITY[t].label}
+                            style={{ color: UTILITY_CONFIG[t].color }}>
+                            {UTILITY_CONFIG[t].label}
                           </th>
                         ))}
                         <th className="px-6 py-3 font-semibold text-[#dde2f3]">Totale</th>
@@ -195,10 +176,10 @@ export default async function StatistichePage() {
                     <tbody>
                       {years.map(year => {
                         const row       = yearMap[year]
-                        const total     = TYPES.reduce((s, t) => s + row[t], 0)
+                        const total     = UTILITY_TYPES.reduce((s, t) => s + row[t], 0)
                         const prevRow   = yearMap[year - 1]
                         const prevTotal = prevRow
-                          ? TYPES.reduce((s, t) => s + prevRow[t], 0)
+                          ? UTILITY_TYPES.reduce((s, t) => s + prevRow[t], 0)
                           : null
                         const totalChange = prevTotal && prevTotal > 0
                           ? ((total - prevTotal) / prevTotal) * 100
@@ -211,7 +192,7 @@ export default async function StatistichePage() {
                               {year}
                             </td>
 
-                            {TYPES.map(t => {
+                            {UTILITY_TYPES.map(t => {
                               const val    = row[t]
                               const change = yoyChange(year, t)
                               return (
@@ -256,8 +237,6 @@ export default async function StatistichePage() {
   )
 }
 
-// Wrapper necessario per usare il client component ProjectionChart
-// dall'interno di questo server component
 function ProjectionChartWrapper({
   data, color, label,
 }: {

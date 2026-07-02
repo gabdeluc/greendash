@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useToast, Toast } from '@/components/ui/Toast'
 import type { UtilityType } from '@/lib/averages'
+import { UTILITY_CONFIG, UTILITY_TYPES } from '@/lib/utility-config'
 
 type Bill = {
   id: string
@@ -21,18 +22,9 @@ const MONTHS      = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott'
 const MONTHS_FULL = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
                      'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre']
 
-const UTILITY: Record<UtilityType, { label: string; icon: string; color: string }> = {
-  luce:     { label: 'Luce',     icon: 'bolt',                  color: '#f59e0b' },
-  gas:      { label: 'Gas',      icon: 'local_fire_department', color: '#f97316' },
-  acqua:    { label: 'Acqua',    icon: 'water_drop',            color: '#3b82f6' },
-  telefono: { label: 'Telefono', icon: 'call',                  color: '#a78bfa' },
-}
-
 const FREQUENCY_LABEL: Record<number, string> = {
   1: 'Mensile', 2: 'Bimestrale', 3: 'Trimestrale', 4: 'Quadrimestrale',
 }
-
-const TYPES: UtilityType[] = ['luce', 'gas', 'acqua', 'telefono']
 
 export default function BollettaTable({ bills: initialBills }: Props) {
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
@@ -67,7 +59,7 @@ export default function BollettaTable({ bills: initialBills }: Props) {
     const rows = initialBills.filter(b => !deletedIds.has(b.id))
     const headers = ['Tipo', 'Mese', 'Anno', 'Importo (€)', 'Consumo (kWh)', 'Cadenza']
     const body = rows.map(b => [
-      UTILITY[b.type].label,
+      UTILITY_CONFIG[b.type].label,
       MONTHS_FULL[b.month - 1],
       b.year,
       b.amount_eur.toFixed(2),
@@ -126,7 +118,7 @@ export default function BollettaTable({ bills: initialBills }: Props) {
             >
               Tutti
             </button>
-            {TYPES.map(t => (
+            {UTILITY_TYPES.map(t => (
               <button
                 key={t}
                 onClick={() => setFilterType(filterType === t ? 'all' : t)}
@@ -135,10 +127,10 @@ export default function BollettaTable({ bills: initialBills }: Props) {
                     ? 'border-current'
                     : 'border-[#3c4a42] text-[#bbcabf] hover:text-[#dde2f3] hover:border-[#86948a]'}`}
                 style={filterType === t
-                  ? { color: UTILITY[t].color, background: `${UTILITY[t].color}15` }
+                  ? { color: UTILITY_CONFIG[t].color, background: `${UTILITY_CONFIG[t].color}15` }
                   : {}}
               >
-                {UTILITY[t].label}
+                {UTILITY_CONFIG[t].label}
               </button>
             ))}
           </div>
@@ -193,7 +185,7 @@ export default function BollettaTable({ bills: initialBills }: Props) {
                 </thead>
                 <tbody>
                   {bills.map(b => {
-                    const u = UTILITY[b.type]
+                    const u = UTILITY_CONFIG[b.type]
                     const isConfirming = confirmId === b.id
                     return (
                       <tr key={b.id}
